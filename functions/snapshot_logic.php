@@ -7,6 +7,9 @@
 
 // ── Utilitaires période ───────────────────────────────────────
 
+/**
+ * Retourne la clé de la période courante (ex: '2023-10', '2023-Q4', '2023').
+ */
 function get_current_period_key(string $type = 'monthly'): string {
     $now = new DateTime();
     return match($type) {
@@ -16,6 +19,9 @@ function get_current_period_key(string $type = 'monthly'): string {
     };
 }
 
+/**
+ * Retourne la clé de la période précédente.
+ */
 function get_previous_period_key(string $type = 'monthly'): string {
     $now = new DateTime();
     if ($type === 'monthly') {
@@ -26,6 +32,7 @@ function get_previous_period_key(string $type = 'monthly'): string {
         $year  = $q === 1 ? (int)$now->format('Y') - 1 : (int)$now->format('Y');
         return "{$year}-Q{$prevQ}";
     }
+    // yearly
     return (string)((int)$now->format('Y') - 1);
 }
 
@@ -120,7 +127,7 @@ function get_period_card_data(string $userId, string $type = 'monthly'): array {
 
     // Compter tous les films vus (avec ou sans like_score)
     $totalSeen = (int)db_fetch_one(
-        "SELECT COUNT(*) AS c FROM ratings WHERE user_id=? AND rated_at BETWEEN ? AND ?",
+        'SELECT COUNT(*) AS c FROM ratings WHERE user_id = ? AND rated_at BETWEEN ? AND ?',
         [$userId, $dateStart, $dateEnd]
     )['c'];
 
@@ -145,14 +152,14 @@ function get_dna_mutation_rate(string $userId, string $prevKey, string $type = '
 
     // Snapshot précédent
     $snapRows = db_fetch_all(
-        "SELECT criterio, avg_score FROM user_dna_history WHERE user_id=? AND period_key=? AND snapshot_type=?",
+        "SELECT criterio, avg_score FROM user_dna_history WHERE user_id=? AND period_key=? AND snapshot_type=? AND avg_score IS NOT NULL",
         [$userId, $prevKey, $type]
     );
     if (empty($snapRows)) return 0.0;
     $dnaSnap = array_column($snapRows, 'avg_score', 'criterio');
 
     // DNA actuel
-    $curRows = db_fetch_all('SELECT criterio, avg_score FROM user_dna WHERE user_id=?', [$userId]);
+    $curRows = db_fetch_all('SELECT criterio, avg_score FROM user_dna WHERE user_id=? AND avg_score IS NOT NULL', [$userId]);
     $dnaCur  = array_column($curRows, 'avg_score', 'criterio');
     if (empty($dnaCur)) return 0.0;
 
@@ -174,9 +181,8 @@ function get_dna_mutation_rate(string $userId, string $prevKey, string $type = '
  */
 function get_dna_history_grouped(string $userId, string $type = 'monthly'): array {
     $rows = db_fetch_all(
-        "SELECT period_key, criterio, avg_score
-         FROM user_dna_history
-         WHERE user_id=? AND snapshot_type=?
+        "SELECT period_key, criterio, avg_score FROM user_dna_history
+         WHERE user_id=? AND snapshot_type=? AND avg_score IS NOT NULL
          ORDER BY period_key ASC",
         [$userId, $type]
     );

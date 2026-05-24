@@ -37,10 +37,12 @@ $report = [
         'ds_store_deleted'       => null, // int
         'tmdb_films_inserted'    => null, // int
         'oracle_films_cleaned'   => null, // array de ['id', 'title']
+        'oracle_series_cleaned'  => null, // array de ['id', 'title']
         'dna_snapshots_taken'    => null, // int — tâche 6
         'providers_refreshed'    => null, // int — tâche 7
         'notifications_purged'   => null, // int — tâche 8
         'access_attempts_purged' => null, // int — tâche 9
+        'new_episodes_notified'  => null, // int — tâche 10
     ],
     'errors'         => [],
 ];
@@ -262,8 +264,8 @@ try {
         $oracleSeries[] = ['id' => $seriesId, 'title' => $title, 'human_votes' => $voteCount];
         echo "[Oracle Cleanup] Série #$seriesId \"$title\" → Oracle retiré ($voteCount votes humains).\n";
     }
-
     $report['tasks']['oracle_series_cleaned'] = $oracleSeries;
+
     echo "[Oracle Cleanup] Terminé.\n\n";
 
 } catch (Exception $e) {
@@ -349,7 +351,7 @@ try {
     echo "[ERREUR] Tâche 6 : " . $e->getMessage() . "\n\n";
 }
 
-// ── TÂCHE 7 : Refresh watch providers (TTL 3 jours, batch 50) ───────────────
+// ── TÂCHE 7 : Refresh watch providers (TTL 3 jours, batch 50) ─────────────────
 echo "-> Lancement Tâche 7 : Refresh watch providers...\n";
 flush();
 try {
@@ -443,6 +445,29 @@ try {
     $report['tasks']['access_attempts_purged'] = 0;
     echo "[ERREUR] Tâche 9 : " . $e->getMessage() . "\n\n";
 }
+
+// ── TÂCHE 10 : Vérification nouveaux épisodes séries ───────────────────────────
+echo "-> Lancement Tâche 10 : Vérification nouveaux épisodes séries...\n";
+flush();
+try {
+    if (!function_exists('check_new_episodes_and_notify')) {
+        require_once __DIR__ . '/../functions/series_logic.php';
+    }
+    // On capture la sortie de la fonction pour le log
+    ob_start();
+    check_new_episodes_and_notify();
+    $output = ob_get_clean();
+    echo $output; // Affiche la sortie de la fonction dans le log du cron
+    // Compte approximatif des notifications envoyées (peut être amélioré)
+    $notifiedCount = substr_count($output, 'Nouveau :');
+    $report['tasks']['new_episodes_notified'] = $notifiedCount;
+    echo "[OK] Vérification épisodes terminée.\n\n";
+} catch (Exception $e) {
+    $report['errors'][] = "Tâche 10 : " . $e->getMessage();
+    $report['tasks']['new_episodes_notified'] = 0;
+    echo "[ERREUR] Tâche 10 : " . $e->getMessage() . "\n\n";
+}
+
 
 // ── ÉCRITURE DU LOG JSON ─────────────────────────────────────────────────────
 try {
