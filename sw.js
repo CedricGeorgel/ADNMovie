@@ -1,29 +1,19 @@
 /**
  * SW.JS — Service Worker ADN Movie (unique)
- * Gère : PWA install / offline fallback + Web Push notifications.
- *
- * Fichier unique pour éviter le conflit de scope '/' entre
- * l'ancien service-worker.js (install.php) et ce fichier (push).
- * Les deux enregistraient scope '/' — le second restait en 'waiting'
- * indéfiniment, bloquant navigator.serviceWorker.ready dans push.js.
+ * Gère : PWA install + Web Push notifications.
+ * Pas de fetch interceptor : les requêtes PHP/API passent sans interférence.
  */
-
-const CACHE_NAME = 'adnmovie-v2';
 
 // ── Lifecycle ────────────────────────────────────────────────────────────────
 
 self.addEventListener('install', () => {
+    // Force l'activation immédiate sans attendre la fermeture des onglets
     self.skipWaiting();
 });
 
 self.addEventListener('activate', event => {
+    // Prend le contrôle de tous les clients immédiatement
     event.waitUntil(clients.claim());
-});
-
-// ── Fetch (pass-through, fallback cache) ────────────────────────────────────
-
-self.addEventListener('fetch', event => {
-    event.respondWith(fetch(event.request).catch(() => caches.match(event.request)));
 });
 
 // ── Push event ───────────────────────────────────────────────────────────────

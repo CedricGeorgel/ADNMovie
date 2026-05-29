@@ -63,8 +63,9 @@ function renderHeader($user = null) {
         if ($user) {
             $vapidPublic = function_exists('get_vapid_public_key') ? get_vapid_public_key() : '';
             if ($vapidPublic) {
+                $vpush = file_exists(__DIR__ . '/../assets/js/push.js') ? filemtime(__DIR__ . '/../assets/js/push.js') : 1;
                 echo '<script>window.VAPID_PUBLIC_KEY=' . json_encode($vapidPublic) . ';</script>';
-                echo '<script src="assets/js/push.js?v=1" defer></script>';
+                echo '<script src="assets/js/push.js?v=' . $vpush . '" defer></script>';
             }
         }
     }
