@@ -98,3 +98,63 @@ function check_new_episodes_and_notify(): void
 
     echo "[Tâche 10] Vérification terminée.\n";
 }
+
+/**
+ * Récupère les épisodes diffusés entre $windowStart et $windowEnd
+ * pour toutes les saisons d'une série TMDB.
+ *
+ * Utilise fetch_tmdb_season() de api_tmdb.php pour chaque saison.
+ * On ne frappe TMDB que pour les saisons dont au moins un épisode
+ * pourrait être dans la fenêtre — on ne peut pas le savoir à l'avance,
+ * donc on interroge toutes les saisons du 1 au $totalSaisons.
+ *
+ * @return array  Liste de tableaux ['season', 'episode', 'name', 'air_date']
+ */
+function _fetch_new_episodes_from_tmdb(int $tmdbId, int $totalSaisons, string $windowStart, string $windowEnd): array
+{
+    if (!function_exists('fetch_tmdb_season')) {
+        require_once __DIR__ . '/api_tmdb.php';
+    }
+
+    $newEpisodes = [];
+
+    for ($s = 1; $s <= $totalSaisons; $s++) {
+        $seasonData = fetch_tmdb_season($tmdbId, $s);
+        if (!$seasonData || empty($seasonData['episodes'])) continue;
+
+        foreach ($seasonData['episodes'] as $ep) {
+            $airDate = $ep['air_date'] ?? null;
+            if (!$airDate) continue;
+            // Filtre : épisode diffusé dans la fenêtre de détection
+            if ($airDate >= $windowStart && $airDate <= $windowEnd) {
+                $newEpisodes[] = [
+                    'season'   => $s,
+                    'episode'  => $ep['episode_number'],
+                    'name'     => $ep['name'] ?? '',
+                    'air_date' => $airDate,
+                ];
+            }
+        }
+    }
+
+    return $newEpisodes;
+}
+
+/**
+ * Insère ou met à jour un épisode dans series_episodes.
+ * Appelée après détection d'un nouvel épisode pour garder la BDD à jour.
+ *
+ * @param int   $seriesId  ID local (table series)
+ * @param array $ep        ['season', 'episode', 'name', 'air_date']
+ */
+function _upsert_episode(int $seriesId, array $ep): void
+{
+    db_execute(
+        'INSERT INTO series_episodes (series_id, season_number, episode_number, air_date, name)
+         VALUES (?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+             air_date = VALUES(air_date),
+             name     = VALUES(name)',
+        [$seriesId, $ep['season'], $ep['episode'], $ep['air_date'], $ep['name']]
+    );
+}

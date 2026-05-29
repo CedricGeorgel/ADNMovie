@@ -286,7 +286,7 @@ function notify_friends_dna_vote(string $voterId, int $contentId, array $voteSco
     $dnaTable     = $type === 'series' ? 'user_series_dna' : 'user_dna';
     $sourcePrefix = $type === 'series' ? 'fvs_' : 'fvm_'; // friend_vote_series / friend_vote_movie
     $label        = $type === 'series' ? 'une série' : 'un film';
-    $link         = 'fiche.php?id=' . $contentId . ($type === 'series' ? '&type=series' : '');
+    $link         = 'fiche.php?id=' . $contentId . ($type === 'series' ? '&type=tv' : '');
 
     $voterName = db_fetch_one('SELECT username FROM users WHERE id = ?', [$voterId])['username'] ?? 'Un Spécimen';
 
