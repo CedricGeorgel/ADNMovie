@@ -85,6 +85,10 @@ if ($contentType === 'movie') {
     $content = fetch_tmdb_series($tmdbId);
     if (!$content) { header('Location: home.php'); exit; }
 
+    // Cache poster localement + upsert title/poster/year dans la table series
+    upsert_series_metadata($tmdbId, $content);
+    $content['poster'] = 'assets/series_posters/' . $tmdbId . '.jpg';
+
     $seriesStats = get_series_stats_by_tmdb($tmdbId);
 
     // Note & wishlist de l'utilisateur connecté pour cette série
@@ -122,9 +126,10 @@ if ($userId && isset($seriesLocalId)) {
     $content = fetch_tmdb_season($tmdbId, $season);
     if (!$content) { header('Location: home.php'); exit; }
 
-    // Fetch series title for back navigation
+    // Fetch series title for back navigation + sync poster
     $seriesData    = fetch_tmdb_series($tmdbId);
     $seriesTitle   = $seriesData ? $seriesData['title'] : '';
+    if ($seriesData) upsert_series_metadata($tmdbId, $seriesData);
 
     // Note de saison de l'utilisateur connecté
     $seasonIsLiked         = false;
@@ -153,9 +158,10 @@ if ($userId && isset($seriesLocalId)) {
     $content = fetch_tmdb_episode($tmdbId, $season, $episode);
     if (!$content) { header('Location: home.php'); exit; }
 
-    // Fetch series title for back navigation
+    // Fetch series title for back navigation + sync poster
     $seriesData  = fetch_tmdb_series($tmdbId);
     $seriesTitle = $seriesData ? $seriesData['title'] : '';
+    if ($seriesData) upsert_series_metadata($tmdbId, $seriesData);
 
     // Note d'épisode de l'utilisateur connecté
     $episodeIsLiked        = false;
