@@ -8,17 +8,17 @@
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
     if (!window.VAPID_PUBLIC_KEY) return;
 
-    // Register SW
-    let reg;
+    // Register SW (idempotent — le navigateur réutilise l'existant si inchangé)
     try {
-        reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+        await navigator.serviceWorker.register('/sw.js', { scope: '/' });
     } catch (e) {
         console.warn('[push] SW registration failed', e);
         return;
     }
 
-    // Show the opt-in button once SW is ready
-    await navigator.serviceWorker.ready;
+    // Utilise la registration ACTIVE (ready), pas celle retournée par register()
+    // qui peut être en état 'waiting' si une ancienne version était déjà active.
+    const reg = await navigator.serviceWorker.ready;
     updatePushBtn(reg);
 })();
 

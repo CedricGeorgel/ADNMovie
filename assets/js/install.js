@@ -1,6 +1,6 @@
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/assets/js/service-worker.js', { scope: '/' })
+        navigator.serviceWorker.register('/sw.js', { scope: '/' })
             .then(() => console.log('Service Worker OK'))
             .catch(err => console.error('Erreur SW:', err));
     });

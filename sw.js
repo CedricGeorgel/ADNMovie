@@ -1,11 +1,32 @@
 /**
- * SW.JS — Service Worker ADN Movie
- * Gère les Web Push notifications (RFC 8030 / RFC 8291).
+ * SW.JS — Service Worker ADN Movie (unique)
+ * Gère : PWA install / offline fallback + Web Push notifications.
+ *
+ * Fichier unique pour éviter le conflit de scope '/' entre
+ * l'ancien service-worker.js (install.php) et ce fichier (push).
+ * Les deux enregistraient scope '/' — le second restait en 'waiting'
+ * indéfiniment, bloquant navigator.serviceWorker.ready dans push.js.
  */
 
-const CACHE_NAME = 'adnmovie-v1';
+const CACHE_NAME = 'adnmovie-v2';
 
-// ── Push event ────────────────────────────────────────────────────────────────
+// ── Lifecycle ────────────────────────────────────────────────────────────────
+
+self.addEventListener('install', () => {
+    self.skipWaiting();
+});
+
+self.addEventListener('activate', event => {
+    event.waitUntil(clients.claim());
+});
+
+// ── Fetch (pass-through, fallback cache) ────────────────────────────────────
+
+self.addEventListener('fetch', event => {
+    event.respondWith(fetch(event.request).catch(() => caches.match(event.request)));
+});
+
+// ── Push event ───────────────────────────────────────────────────────────────
 
 self.addEventListener('push', event => {
     let data = { title: 'ADN Movie', body: 'Nouvelle notification', url: '/' };
@@ -24,7 +45,7 @@ self.addEventListener('push', event => {
     );
 });
 
-// ── Notification click ────────────────────────────────────────────────────────
+// ── Notification click ───────────────────────────────────────────────────────
 
 self.addEventListener('notificationclick', event => {
     event.notification.close();
