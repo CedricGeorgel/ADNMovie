@@ -107,54 +107,85 @@ try {
     echo "[ERREUR] Tâche 3 : " . $e->getMessage() . "\n\n";
 }
 
-// ── TÂCHE 4 : Appel API TMDB ─────────────────────────────────────────────────
-echo "-> Lancement Tâche 4 : Appel API TMDB...\n";
+// ── TÂCHE 4 : Appel API TMDB (Sorties Francophones) ──────────────────────────
+echo "-> Lancement Tâche 4 : Appel API TMDB (FR, BE, CH, LU)...\n";
 flush();
 try {
-    if (!defined('TMDB_API_KEY') || empty(TMDB_API_KEY)) throw new Exception("Clé TMDB_API_KEY manquante.");
+    if (!defined('TMDB_API_KEY') || empty(TMDB_API_KEY)) {
+        throw new Exception("Clé TMDB_API_KEY manquante.");
+    }
 
-    $insertedCount = 0;
-    $currentPage   = 1;
-    $totalPages    = 1;
-    $allMovies     = [];
+    $regions = ['FR', 'BE', 'CH', 'LU'];
+    $uniqueMovies = [];
+    $apiCallsCount = 0;
 
-    do {
-        $apiUrl = "https://api.themoviedb.org/3/movie/now_playing?api_key=" . TMDB_API_KEY . "&language=fr-FR&region=FR&page=" . $currentPage;
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $apiUrl);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-        curl_setopt($ch, CURLOPT_USERAGENT, 'Moovie-App/1.0');
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+    foreach ($regions as $region) {
+        $currentPage = 1;
+        
+        do {
+            $apiUrl = "https://api.themoviedb.org/3/movie/now_playing?api_key=" . TMDB_API_KEY . "&language=fr-FR&region=" . $region . "&page=" . $currentPage;
+            
+            $ch = curl_init();
+            curl_setopt_array($ch, [
+                CURLOPT_URL => $apiUrl,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT => 10,
+                CURLOPT_USERAGENT => 'ADNmovie-App/1.0'
+            ]);
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
 
-        if ($httpCode !== 200 || !$response) break;
+            if ($httpCode !== 200 || !$response) {
+                echo "[Avertissement] TMDB : Échec pour la région $region (Code HTTP $httpCode).\n";
+                break; // On abandonne ce pays, mais on passe au suivant
+            }
 
-        $data = json_decode($response, true);
-        if (empty($data['results'])) break;
+            $data = json_decode($response, true);
+            if (empty($data['results'])) break;
 
-        $allMovies  = array_merge($allMovies, $data['results']);
-        $totalPages = min((int)($data['total_pages'] ?? 1), 5); // max 5 pages = 100 films
-        $currentPage++;
+            // Dédoublonnage systématique à la volée via la clé du tableau
+            foreach ($data['results'] as $m) {
+                $uniqueMovies[$m['id']] = $m;
+            }
 
-        if ($currentPage <= $totalPages) usleep(250000); // 250 ms entre pages
-    } while ($currentPage <= $totalPages);
+            // On bride à 2 pages par région (soit le top 40) pour cibler la véritable "affiche"
+            $totalPages = min((int)($data['total_pages'] ?? 1), 2);
+            $currentPage++;
+            $apiCallsCount++;
 
-    if (!empty($allMovies)) {
+            usleep(250000); // Préservation du quota API (4 requêtes/seconde max)
+        } while ($currentPage <= $totalPages);
+    }
+
+    if (!empty($uniqueMovies)) {
         db_begin();
+        
+        // Purge de l'existant
         db_execute("DELETE FROM movies_now_playing");
-        $sql = "INSERT INTO movies_now_playing (tmdb_id, title, poster_path, release_date, vote_average, overview) VALUES (?, ?, ?, ?, ?, ?)";
-        foreach ($allMovies as $m) {
-            db_execute($sql, [$m['id'], $m['title'], $m['poster_path'], $m['release_date'] ?: null, $m['vote_average'], $m['overview']]);
+        
+        // Insertion sécurisée : le IGNORE prévient tout crash SQL résiduel
+        $sql = "INSERT IGNORE INTO movies_now_playing (tmdb_id, title, poster_path, release_date, vote_average, overview) VALUES (?, ?, ?, ?, ?, ?)";
+        $insertedCount = 0;
+        
+        foreach ($uniqueMovies as $m) {
+            db_execute($sql, [
+                $m['id'], 
+                $m['title'], 
+                $m['poster_path'], 
+                empty($m['release_date']) ? null : $m['release_date'], 
+                $m['vote_average'], 
+                $m['overview']
+            ]);
             $insertedCount++;
         }
+        
         db_commit();
         $report['tasks']['tmdb_films_inserted'] = $insertedCount;
-        echo "[OK] TMDB terminé ($insertedCount films insérés, $totalPages page(s)).\n\n";
+        echo "[OK] TMDB terminé ($insertedCount films uniques insérés, $apiCallsCount appels API effectués).\n\n";
     } else {
         $report['tasks']['tmdb_films_inserted'] = 0;
-            echo "[ERREUR] TMDB : Aucun résultat.\n\n";
+        echo "[ERREUR] TMDB : Aucun résultat viable récupéré.\n\n";
     }
 } catch (Exception $e) {
     if (function_exists('db_is_in_transaction') && db_is_in_transaction()) db_rollback();
@@ -379,7 +410,7 @@ try {
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT        => 8,
-            CURLOPT_USERAGENT      => 'Moovie-App/2.0',
+            CURLOPT_USERAGENT      => 'AdnMovie-App/2.0',
         ]);
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -453,15 +484,13 @@ try {
     if (!function_exists('check_new_episodes_and_notify')) {
         require_once __DIR__ . '/../functions/series_logic.php';
     }
-    // On capture la sortie de la fonction pour le log
     ob_start();
     check_new_episodes_and_notify();
     $output = ob_get_clean();
-    echo $output; // Affiche la sortie de la fonction dans le log du cron
-    // Compte approximatif des notifications envoyées (peut être amélioré)
+    echo $output;
     $notifiedCount = substr_count($output, 'Nouveau :');
     $report['tasks']['new_episodes_notified'] = $notifiedCount;
-    echo "[OK] Vérification épisodes terminée.\n\n";
+    echo "[OK] Vérification épisodes terminée ($notifiedCount notifications envoyées).\n\n";
 } catch (Exception $e) {
     $report['errors'][] = "Tâche 10 : " . $e->getMessage();
     $report['tasks']['new_episodes_notified'] = 0;

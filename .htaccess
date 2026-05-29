@@ -1,0 +1,46 @@
+# --- MOOVIE CONFIGURATION ---
+
+# 1. Empêcher le listing des répertoires
+Options -Indexes
+
+# Sécurité HTTP
+<IfModule mod_headers.c>
+    Header always set X-Frame-Options "DENY"
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+</IfModule>
+
+# 2. Définir la page d'erreur 404
+ErrorDocument 404 /404.php
+
+# 3. Protéger les fichiers sensibles
+<FilesMatch "\.(json|log)$">
+    Order deny,allow
+    Deny from all
+</FilesMatch>
+
+# Exception : manifest.json doit être accessible pour le PWA
+<Files "manifest.json">
+    Order allow,deny
+    Allow from all
+</Files>
+
+# Service Worker : autorise le scope racine depuis assets/js/
+<Files "service-worker.js">
+    Header set Service-Worker-Allowed "/"
+</Files>
+
+# 4. Activation de la réécriture d'URL
+RewriteEngine On
+
+# 5. Redirection pour enlever le .php visible (SAUF pour les requêtes POST / API)
+RewriteCond %{REQUEST_METHOD} !=POST
+RewriteCond %{THE_REQUEST} /([^.]+)\.php [NC]
+RewriteRule ^ /%1 [NC,L,R=301]
+
+# 6. Exécution transparente des fichiers .php
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME}.php -f
+RewriteRule ^(.*)$ $1.php [NC,L]

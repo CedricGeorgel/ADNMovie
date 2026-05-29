@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /archives.php
+Allow: /content.php
+Allow: /fiche.php
+Allow: /assets/
+Disallow: /api/
+Disallow: /config/
+Disallow: /functions/
+Disallow: /components/
+Disallow: /admin.php
+Disallow: /moderation.php
+Disallow: /install.php
+
+Sitemap: https://adnmovie.fr/sitemap.php

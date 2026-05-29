@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs ls *)",
+      "Bash(python3)",
+      "Bash(xargs cat *)",
+      "Bash(grep -E \"\\\\.php$\")",
+      "Bash(xargs -I {} basename {})",
+      "Bash(sed -n '38,55p' \"/Users/cedricgeorgel/Documents/Moovie Soirée Ciné/V2/mood.php\")",
+      "Bash(sed -n '109,115p' \"/Users/cedricgeorgel/Documents/Moovie Soirée Ciné/V2/home.php\")",
+      "Bash(sed -n '83,92p' \"/Users/cedricgeorgel/Documents/Moovie Soirée Ciné/V2/recommendations.php\")",
+      "Bash(sed -n '64,70p' \"/Users/cedricgeorgel/Documents/Moovie Soirée Ciné/V2/archives.php\")",
+      "Bash(grep -n 'room\\\\['\\\\''id'\\\\''\\\\]\\\\|roomId\\\\|$roomId\\\\|$room_id\\\\|data-room' '/Users/cedricgeorgel/Documents/Moovie Soirée Ciné/V2/session.php')",
+      "Bash(grep -n 'seriesLocalId\\\\|$localId\\\\|$seriesId\\\\|series.*local\\\\|local.*series' '/Users/cedricgeorgel/Documents/Moovie Soirée Ciné/V2/fiche.php')",
+      "Bash(grep -n '^$episode\\\\s*=\\\\|$episode ' '/Users/cedricgeorgel/Documents/Moovie Soirée Ciné/V2/fiche.php')",
+      "Bash(grep -n '$episode' '/Users/cedricgeorgel/Documents/Moovie Soirée Ciné/V2/fiche.php')",
+      "Bash(grep 'GET\\\\|$season\\\\|$episode')"
+    ]
+  }
+}

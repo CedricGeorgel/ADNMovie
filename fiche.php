@@ -106,7 +106,15 @@ if ($contentType === 'movie') {
             }
         }
     }
-
+// Wishlist série
+$seriesIsWishlisted = false;
+if ($userId && isset($seriesLocalId)) {
+    $wRow = db_fetch_one(
+        'SELECT 1 FROM user_wishlist WHERE user_id = ? AND series_id = ?',
+        [$userId, $seriesLocalId]
+    );
+    $seriesIsWishlisted = (bool)$wRow;
+}
     $backdropImage = $content['poster'];
     $pageTitle     = h($content['title']) . ' - MOOVIE';
 
@@ -118,6 +126,26 @@ if ($contentType === 'movie') {
     $seriesData    = fetch_tmdb_series($tmdbId);
     $seriesTitle   = $seriesData ? $seriesData['title'] : '';
 
+    // Note de saison de l'utilisateur connecté
+    $seasonIsLiked         = false;
+    $seasonExistingScores  = null;
+    $seasonSeriesLocalId   = null;
+    if ($userId) {
+        $seriesRow = db_fetch_one('SELECT id FROM series WHERE tmdb_id = ?', [$tmdbId]);
+        if ($seriesRow) {
+            $seasonSeriesLocalId = (int)$seriesRow['id'];
+            $snRating = db_fetch_one(
+                'SELECT scores, is_liked FROM season_ratings
+                 WHERE user_id = ? AND series_id = ? AND season_number = ?',
+                [$userId, $seasonSeriesLocalId, $season]
+            );
+            if ($snRating) {
+                $seasonIsLiked        = (bool)$snRating['is_liked'];
+                $seasonExistingScores = json_decode($snRating['scores'], true);
+            }
+        }
+    }
+
     $backdropImage = $content['poster'];
     $pageTitle     = 'Saison ' . $season . ($seriesTitle ? ' — ' . h($seriesTitle) : '') . ' - MOOVIE';
 
@@ -128,6 +156,27 @@ if ($contentType === 'movie') {
     // Fetch series title for back navigation
     $seriesData  = fetch_tmdb_series($tmdbId);
     $seriesTitle = $seriesData ? $seriesData['title'] : '';
+
+    // Note d'épisode de l'utilisateur connecté
+    $episodeIsLiked        = false;
+    $episodeExistingScores = null;
+    $episodeSeriesLocalId  = null;
+    $episodeTotalEpisodes  = (int)($content['episode_count'] ?? 0);
+    if ($userId) {
+        $seriesRow = db_fetch_one('SELECT id FROM series WHERE tmdb_id = ?', [$tmdbId]);
+        if ($seriesRow) {
+            $episodeSeriesLocalId = (int)$seriesRow['id'];
+            $epRating = db_fetch_one(
+                'SELECT scores, is_liked, like_score FROM episode_ratings
+                 WHERE user_id = ? AND series_id = ? AND season_number = ? AND episode_number = ?',
+                [$userId, $episodeSeriesLocalId, $season, $episode]
+            );
+            if ($epRating) {
+                $episodeIsLiked        = (bool)$epRating['is_liked'];
+                $episodeExistingScores = json_decode($epRating['scores'], true);
+            }
+        }
+    }
 
     $backdropImage = $content['still'];
     $pageTitle     = h($content['name']) . ' — S' . str_pad($season, 2, '0', STR_PAD_LEFT) . 'E' . str_pad($episode, 2, '0', STR_PAD_LEFT) . ' - MOOVIE';
@@ -308,13 +357,24 @@ $canonicalUrl  = 'https://adnmovie.fr/fiche.php?id=' . $tmdbId
                         $seriesStats['count']
                     ); ?>
                     <?php if ($currentUser): ?>
-                        <div style="margin-top:15px; display:flex; flex-direction:column; gap:8px;">
+                        <?php if ($seriesExistingScores): ?>
+                            <p style="margin-top:12px; font-size:0.68rem; color:var(--text-dim); text-align:center; line-height:1.4;">
+                                Moyenne de vos analyses de saisons
+                            </p>
+                        <?php else: ?>
+                            <p style="margin-top:12px; font-size:0.68rem; color:var(--text-dim); text-align:center; line-height:1.4;">
+                                Notez chaque saison pour construire votre analyse
+                            </p>
+                        <?php endif; ?>
+                        <div style="margin-top:10px; display:flex; flex-direction:column; gap:8px;">
+                            <?php if (!empty($seriesLocalId)): ?>
                             <button class="btn-base active" onclick="openRateModal()" style="width:100%;">
-                                <?= $seriesExistingScores ? 'Modifier mon analyse' : 'Analyser la série' ?>
+                                <?= $seriesExistingScores ? 'Modifier mon analyse de la série' : 'Analyser la série complète' ?>
                             </button>
+                            <?php endif; ?>
                             <button id="btnSeriesWishlist"
                                     class="btn-base <?= $seriesIsWishlisted ? 'btn-wishlisted' : '' ?>"
-                                    onclick="toggleSeriesWishlist(<?= (int)$tmdbId ?>)"
+                                    onclick="toggleSeriesWishlist(<?= (int)($seriesLocalId ?? 0) ?>)"
                                     style="width:100%;">
                                 <?= $seriesIsWishlisted ? '🔖 Dans ma wishlist' : '+ Ajouter à ma watchlist' ?>
                             </button>
@@ -436,21 +496,46 @@ $canonicalUrl  = 'https://adnmovie.fr/fiche.php?id=' . $tmdbId
                 <?php endif; ?>
 
                 <?php if (!empty($content['seasons'])): ?>
+                <?php
+                // Pré-charger les notes de saison de l'utilisateur pour cette série
+                $userSeasonNotes = [];
+                if ($userId && isset($seriesLocalId)) {
+                    $snRows = db_fetch_all(
+                        'SELECT season_number, scores FROM season_ratings
+                         WHERE user_id = ? AND series_id = ?',
+                        [$userId, $seriesLocalId]
+                    );
+                    foreach ($snRows as $snRow) {
+                        $userSeasonNotes[(int)$snRow['season_number']] = json_decode($snRow['scores'], true);
+                    }
+                }
+                ?>
                 <div class="seasons-section" style="margin-top:30px;">
                     <h3 style="font-size:0.8rem; letter-spacing:2px; color:var(--text-dim); margin-bottom:15px;">SAISONS</h3>
                     <div class="seasons-grid" style="display:flex; flex-wrap:wrap; gap:12px;">
-                        <?php foreach ($content['seasons'] as $s): ?>
-                        <a href="fiche.php?id=<?= (int)$tmdbId ?>&type=tv&season=<?= (int)$s['season_number'] ?>"
+                        <?php foreach ($content['seasons'] as $s):
+                            $sNum   = (int)$s['season_number'];
+                            $sRated = isset($userSeasonNotes[$sNum]);
+                        ?>
+                        <a href="fiche.php?id=<?= (int)$tmdbId ?>&type=tv&season=<?= $sNum ?>"
                            class="season-card"
-                           style="display:flex; flex-direction:column; align-items:center; gap:6px; text-decoration:none; color:var(--text-main); background:var(--card-bg, rgba(255,255,255,0.04)); border-radius:10px; padding:10px; width:100px; text-align:center; transition:background 0.2s;"
+                           style="display:flex; flex-direction:column; align-items:center; gap:6px; text-decoration:none; color:var(--text-main); background:var(--card-bg, rgba(255,255,255,0.04)); border-radius:10px; padding:10px; width:100px; text-align:center; transition:background 0.2s; position:relative;"
                            onmouseover="this.style.background='rgba(255,255,255,0.08)'"
                            onmouseout="this.style.background='var(--card-bg, rgba(255,255,255,0.04))'">
+                            <?php if ($sRated): ?>
+                                <span style="position:absolute; top:6px; right:6px; font-size:0.6rem; background:#4CAF8222; color:#4CAF82; border:1px solid #4CAF8255; border-radius:20px; padding:1px 5px;">✓</span>
+                            <?php endif; ?>
                             <img src="<?= h($s['poster_path']) ?>"
                                  alt="<?= h($s['name']) ?>"
                                  style="width:80px; border-radius:8px; aspect-ratio:2/3; object-fit:cover;"
                                  onerror="this.src='assets/no-poster.jpg'">
                             <span style="font-size:0.78rem; font-weight:600;"><?= h($s['name']) ?></span>
                             <span style="font-size:0.68rem; color:var(--text-dim);"><?= (int)$s['episode_count'] ?> épisodes</span>
+                            <?php if ($userId): ?>
+                                <span style="font-size:0.62rem; color:var(--text-dim); margin-top:2px;">
+                                    <?= $sRated ? '✏️ Modifier' : '+ Analyser' ?>
+                                </span>
+                            <?php endif; ?>
                         </a>
                         <?php endforeach; ?>
                     </div>
@@ -492,6 +577,27 @@ $canonicalUrl  = 'https://adnmovie.fr/fiche.php?id=' . $tmdbId
                          alt="<?= h($content['name']) ?>"
                          onerror="this.src='assets/no-poster.jpg'">
                 </div>
+                <?php if ($currentUser && $seasonSeriesLocalId): ?>
+                <div class="radar-block">
+                    <?php
+                    // Radar de la saison : ADN collectif depuis season_ratings pour cette saison
+                    $seasonStats = get_season_stats($seasonSeriesLocalId, $season);
+                    renderRadarChart(
+                        $seasonStats['averages'] ?? [],
+                        $seasonExistingScores,
+                        $seasonStats['polarization'] ?? 0,
+                        'seasonChart',
+                        true,
+                        $seasonStats['count'] ?? 0
+                    );
+                    ?>
+                    <div style="margin-top:15px; display:flex; flex-direction:column; gap:8px;">
+                        <button class="btn-base active" onclick="openRateModal()" style="width:100%;">
+                            <?= $seasonExistingScores ? 'Modifier mon analyse' : 'Analyser cette saison' ?>
+                        </button>
+                    </div>
+                </div>
+                <?php endif; ?>
             </aside>
 
             <section class="movie-info-content">
@@ -590,6 +696,26 @@ $canonicalUrl  = 'https://adnmovie.fr/fiche.php?id=' . $tmdbId
                     ⏱️ <?= (int)$content['runtime'] ?> min
                 </div>
                 <?php endif; ?>
+                <?php if ($currentUser && $episodeSeriesLocalId): ?>
+                <div class="radar-block">
+                    <?php
+                    $episodeStats = get_episode_stats($episodeSeriesLocalId, $season, $episode);
+                    renderRadarChart(
+                        $episodeStats['averages'] ?? [],
+                        $episodeExistingScores,
+                        $episodeStats['polarization'] ?? 0,
+                        'episodeChart',
+                        true,
+                        $episodeStats['count'] ?? 0
+                    );
+                    ?>
+                    <div style="margin-top:15px; display:flex; flex-direction:column; gap:8px;">
+                        <button class="btn-base active" onclick="openRateModal()" style="width:100%;">
+                            <?= $episodeExistingScores ? 'Modifier mon analyse' : 'Analyser cet épisode' ?>
+                        </button>
+                    </div>
+                </div>
+                <?php endif; ?>
             </aside>
 
             <section class="movie-info-content">
@@ -651,9 +777,44 @@ $canonicalUrl  = 'https://adnmovie.fr/fiche.php?id=' . $tmdbId
         <?php renderRateModal($movieId, $stats['user_note_assoc'], $isLiked, $existingLikeScore); ?>
         <?php renderSignalModal(); ?>
         <script src="/assets/js/fiche.js?v=1" defer></script>
-    <?php elseif ($contentType === 'tv' && $currentUser): ?>
-        <?php renderRateModal($tmdbId, $seriesExistingScores, $seriesIsLiked, null, 'tv'); ?>
+    <?php elseif ($contentType === 'tv' && $currentUser && !empty($seriesLocalId)): ?>
+        <?php renderRateModal(
+            $seriesLocalId,
+            $seriesExistingScores,
+            $seriesIsLiked ?? false,
+            null,
+            'tv_full'
+        ); ?>
         <?php renderSignalModal(); ?>
+        <script>
+            window.__seriesLocalId = <?= (int)$seriesLocalId ?>;
+        </script>
+        <script src="/assets/js/fiche.js?v=1" defer></script>
+    <?php elseif ($contentType === 'season' && $currentUser && $seasonSeriesLocalId): ?>
+        <?php renderRateModal(
+            $seasonSeriesLocalId,
+            $seasonExistingScores,
+            $seasonIsLiked,
+            null,
+            'tv',
+            $season
+        ); ?>
+        <script src="/assets/js/fiche.js?v=1" defer></script>
+    <?php elseif ($contentType === 'episode' && $currentUser && $episodeSeriesLocalId): ?>
+        <?php renderRateModal(
+            $episodeSeriesLocalId,
+            $episodeExistingScores,
+            $episodeIsLiked,
+            null,
+            'episode',
+            $season
+        ); ?>
+        <script>
+            window.__episodeSeriesLocalId = <?= (int)$episodeSeriesLocalId ?>;
+            window.__episodeSeasonNumber  = <?= (int)$season ?>;
+            window.__episodeNumber        = <?= (int)$episode ?>;
+            window.__episodeTotalEpisodes = <?= (int)$episodeTotalEpisodes ?>;
+        </script>
         <script src="/assets/js/fiche.js?v=1" defer></script>
     <?php endif; ?>
 </body>

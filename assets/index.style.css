@@ -1,0 +1,125 @@
+/* ==========================================================================
+   LANDING PAGE (INDEX.PHP)
+   ========================================================================== */
+.page-landing {
+    background: radial-gradient(circle at 50% 0%, var(--bg-gradient-accent) 0%, var(--bg-main) 70%) no-repeat;
+}
+
+.hero-manifesto {
+    padding: 100px 0;
+    text-align: left;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.tagline {
+    font-size: 0.7rem;
+    letter-spacing: 5px;
+    color: var(--pastel-blue);
+    font-weight: 900;
+    display: block;
+    margin-bottom: 20px;
+}
+
+.hero-manifesto h1 {
+    font-size: clamp(2.5rem, 8vw, 4.5rem);
+    line-height: 1;
+    font-weight: 900;
+    margin-bottom: 30px;
+    letter-spacing: -2px;
+}
+
+.manifesto-text {
+    font-size: 1.1rem;
+    line-height: 1.6;
+    color: var(--text-dim);
+    margin-bottom: 40px;
+}
+
+/* Algo Section */
+.algo-details {
+    padding: 80px 0;
+    border-top: 1px solid var(--border);
+}
+
+.section-title {
+    text-align: center;
+    margin-bottom: 60px;
+}
+
+.section-title h2 {
+    font-size: 0.8rem;
+    letter-spacing: 3px;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+}
+
+.algo-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+}
+
+.algo-card {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border);
+    padding: 30px;
+    border-radius: 20px;
+    transition: 0.3s;
+}
+
+.algo-card:hover {
+    border-color: var(--pastel-blue);
+    background: rgba(167, 199, 231, 0.05);
+    transform: translateY(-5px);
+}
+
+.algo-num {
+    font-size: 0.7rem;
+    font-weight: 900;
+    color: var(--pastel-blue);
+    margin-bottom: 15px;
+}
+
+.algo-card h3 {
+    font-size: 1.1rem;
+    margin-bottom: 15px;
+}
+
+.algo-card p {
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: var(--text-dim);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .hero-manifesto { padding: 60px 20px; }
+    .algo-grid { grid-template-columns: 1fr; }
+    /* Garantit que le scroll vertical de la page n'est jamais capturé */
+    .algo-details,
+    .algo-grid,
+    .algo-card,
+    .visual-dna-split,
+    #homeRadarDemo { touch-action: pan-y; }
+}
+.hero-actions {
+    display: flex;          /* Active le mode Flexbox */
+    justify-content: center; /* Centre le contenu horizontalement */
+    align-items: center;     /* Aligne verticalement si besoin */
+    width: 100%;            /* Force la largeur totale */
+    gap: 15px;              /* Espace entre les deux boutons */
+    margin-top: 40px;       /* Espacement par rapport au texte au-dessus */
+}
+
+/* Optionnel : Ajustement pour mobile */
+@media (max-width: 600px) {
+    .hero-actions {
+        flex-direction: column; /* Empile les boutons sur petits écrans */
+        gap: 10px;
+    }
+    .hero-actions .btn-base {
+        width: 100%;            /* Boutons pleine largeur sur mobile */
+        max-width: 300px;
+    }
+}

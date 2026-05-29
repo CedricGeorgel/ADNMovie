@@ -19,12 +19,25 @@ function toggleWishlist(movieId) {
     .catch(e => console.error('toggleWishlist:', e));
 }
 
-function toggleSeriesWishlist(tmdbId) {
+function toggleSeriesWishlist(seriesLocalId) {
     const btn = document.getElementById('btnSeriesWishlist');
-    btn.textContent = btn.classList.contains('btn-wishlisted')
-        ? '+ Ajouter à ma watchlist'
-        : '🔖 Dans ma watchlist';
-    btn.classList.toggle('btn-wishlisted');
+    fetch('api/api_wishlist.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ series_id: seriesLocalId })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (!data.success) return;
+        if (data.wishlisted) {
+            btn.textContent = '🔖 Dans ma wishlist';
+            btn.classList.add('btn-wishlisted');
+        } else {
+            btn.textContent = '+ Ajouter à ma watchlist';
+            btn.classList.remove('btn-wishlisted');
+        }
+    })
+    .catch(e => console.error('toggleSeriesWishlist:', e));
 }
 
 // Fonction pour suivre/ne plus suivre une série
@@ -46,8 +59,6 @@ window.toggleSeriesFollow = async function(seriesId) {
         if (data.success) {
             btn.classList.toggle('btn-followed', data.followed);
             btn.textContent = data.followed ? '✓ Suivi' : '+ Suivre';
-            // Mettre à jour aussi le statut 'ended' si on unfollow ? Ou laisser tel quel.
-            // Pour l'instant, on laisse le statut 'ended' indépendant.
         } else {
             console.error('Erreur lors du changement de statut de suivi:', data.message);
             alert('Une erreur est survenue. Veuillez réessayer.');
@@ -64,8 +75,7 @@ window.markSeriesAsEnded = async function(seriesId) {
     if (!btn) return;
 
     const isEnded = btn.classList.contains('btn-ended');
-    // Assurez-vous que l'API gère 'unmark_ended' si nécessaire pour le unfollow
-    const action = isEnded ? 'unmark_ended' : 'mark_ended'; 
+    const action = isEnded ? 'unmark_ended' : 'mark_ended';
 
     try {
         const response = await fetch('api/api_series_follow.php', {
@@ -78,7 +88,6 @@ window.markSeriesAsEnded = async function(seriesId) {
         if (data.success) {
             btn.classList.toggle('btn-ended', data.ended);
             btn.textContent = data.ended ? 'Terminée' : 'Marquer comme terminée';
-            // Si on marque comme terminée, on peut désactiver le suivi ou changer le bouton
             if (data.ended) {
                 const followBtn = document.getElementById('btnSeriesFollow');
                 if (followBtn) {
@@ -96,15 +105,12 @@ window.markSeriesAsEnded = async function(seriesId) {
     }
 };
 
-// Initialisation des états des boutons au chargement de la page (si nécessaire)
+// Initialisation des états des boutons au chargement de la page
 document.addEventListener('DOMContentLoaded', () => {
-    // Assurez-vous que l'ID de la série est disponible dans le DOM
-    // Par exemple, via un data-attribute sur un élément parent
     const seriesElement = document.querySelector('[data-series-id]');
     const seriesId = seriesElement ? seriesElement.dataset.seriesId : null;
 
     if (seriesId) {
-        // Vérifier le statut de suivi
         fetch(`api/api_series_follow.php?action=is_followed&series_id=${seriesId}`)
             .then(res => res.json())
             .then(data => {
@@ -116,7 +122,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
             });
-        // Vérifier le statut "terminée"
+
         fetch(`api/api_series_follow.php?action=is_ended&series_id=${seriesId}`)
             .then(res => res.json())
             .then(data => {
