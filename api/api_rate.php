@@ -1,5 +1,4 @@
 <?php
-session_start();
 header('Content-Type: application/json');
 require_once __DIR__ . '/../config/settings.php';
 require_once __DIR__ . '/../functions/core_db.php';

@@ -4,7 +4,6 @@
  * Importe l'historique films depuis TMDB / Letterboxd / IMDb (CSV).
  * Les films sont marqués comme vus (sans scores DNA).
  */
-session_start();
 header('Content-Type: application/json');
 set_time_limit(300);
 
