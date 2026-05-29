@@ -17,7 +17,7 @@ function renderFooter() {
                     <span style="color:var(--border);margin:0 6px;">·</span>
                     <a class="footer-no_hover" href="legal.php?tab=cookies">Cookies</a>
                     <span style="color:var(--border);margin:0 6px;">·</span>
-                    <a class="footer-no_hover" href="report.php">Signaler un bug</a>
+                    <a class="footer-no_hover" href="report.php">Creer un ticket</a>
                 </div>
             </div>
         </div>
