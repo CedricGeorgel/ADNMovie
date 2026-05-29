@@ -60,6 +60,7 @@ function renderHeader($user = null) {
         echo '<script src="assets/script.js?v=' . $vs . '" defer></script>';
 
         // VAPID public key + SW registration (logged-in users only)
+        $vapidPublic = '';
         if ($user) {
             $vapidPublic = function_exists('get_vapid_public_key') ? get_vapid_public_key() : '';
             if ($vapidPublic) {
@@ -93,7 +94,9 @@ function renderHeader($user = null) {
                 <div class="notif-panel-header">
                     <span>Notifications</span>
                     <div style="display:flex;align-items:center;gap:8px;">
+                        <?php if ($vapidPublic): ?>
                         <button id="push-optin-btn" class="notif-mark-all" onclick="pushToggle()" title="Notifications push">🔕 Push</button>
+                        <?php endif; ?>
                         <button class="notif-mark-all" onclick="notifMarkAllRead()">Tout lire</button>
                     </div>
                 </div>
