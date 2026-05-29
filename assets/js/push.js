@@ -1,22 +1,22 @@
 /**
  * ASSETS/JS/PUSH.JS
- * Service Worker registration + Web Push opt-in/out.
- * Requires window.VAPID_PUBLIC_KEY set by header.php.
- *
- * Le bouton #push-optin-btn est visible par défaut dans le HTML.
- * Ce script met à jour son état (ON/OFF) et masque le bouton si
- * le navigateur ne supporte pas les push notifications.
+ * Toujours chargé pour les users connectés.
+ * Affiche le bouton #push-optin-btn uniquement si les conditions sont réunies :
+ *   - VAPID_PUBLIC_KEY disponible (vapid_keys.php présent sur le serveur)
+ *   - serviceWorker + PushManager supportés par le navigateur
+ * pushToggle() est toujours défini pour éviter les ReferenceError.
  */
+
+// ── Initialisation ────────────────────────────────────────────────────────────
 
 (async () => {
     const btn = document.getElementById('push-optin-btn');
     if (!btn) return;
 
-    // Masquer le bouton si le navigateur ne supporte pas push
-    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !window.VAPID_PUBLIC_KEY) {
-        btn.style.display = 'none';
-        return;
-    }
+    // Conditions requises — si l'une manque, le bouton reste caché
+    if (!window.VAPID_PUBLIC_KEY) return; // vapid_keys.php absent du serveur
+    if (!('serviceWorker' in navigator)) return;
+    if (!('PushManager' in window)) return; // navigateur non compatible
 
     // Enregistrement SW
     let reg;
@@ -24,63 +24,70 @@
         reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
     } catch (e) {
         console.warn('[push] SW registration failed', e);
-        // Bouton reste visible en état "OFF" — l'utilisateur peut réessayer
         return;
     }
 
-    // Attend le SW actif, avec timeout 4s pour ne pas bloquer
+    // Attend le SW actif, avec timeout 4s
     const activeReg = await Promise.race([
         navigator.serviceWorker.ready,
         new Promise(resolve => setTimeout(() => resolve(reg), 4000)),
     ]);
 
-    await updatePushBtn(activeReg);
+    // Affiche le bouton et met à jour son état
+    btn.style.display = 'inline';
+    btn._reg = activeReg;
+    await _refreshPushBtnState(btn, activeReg);
 })();
 
-async function updatePushBtn(reg) {
-    const btn = document.getElementById('push-optin-btn');
-    if (!btn) return;
+// ── Helpers privés ────────────────────────────────────────────────────────────
 
+async function _getPushManager(reg) {
     // pushManager peut être null si le SW n'est pas encore actif
-    const pm = reg?.pushManager ?? reg?.active?.pushManager ?? null;
-    if (!pm) {
-        // SW pas encore actif — bouton visible en état indéfini, sera mis à jour au prochain chargement
-        btn._reg = reg;
-        return;
-    }
+    return reg?.pushManager ?? null;
+}
+
+async function _refreshPushBtnState(btn, reg) {
+    const pm = await _getPushManager(reg);
+    if (!pm) return; // SW pas encore actif, état mis à jour au prochain chargement
 
     try {
         const sub = await pm.getSubscription();
         btn.textContent = sub ? '🔔 Push ON' : '🔕 Push OFF';
         btn.title       = sub ? 'Désactiver les notifications push' : 'Activer les notifications push';
-        btn._reg = reg;
     } catch (e) {
         console.warn('[push] getSubscription failed', e);
-        btn._reg = reg;
     }
 }
 
+// ── API publique ──────────────────────────────────────────────────────────────
+
+// Toujours défini pour éviter "pushToggle is not defined"
 async function pushToggle() {
     const btn = document.getElementById('push-optin-btn');
     if (!btn) return;
 
-    // Si _reg n'est pas encore set, tenter de l'initialiser maintenant
+    // VAPID non configuré sur ce serveur
+    if (!window.VAPID_PUBLIC_KEY) {
+        alert('Les notifications push ne sont pas configurées sur ce serveur.');
+        return;
+    }
+
+    // Initialiser _reg si absent
     if (!btn._reg) {
         try {
             const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
-            const activeReg = await Promise.race([
+            btn._reg = await Promise.race([
                 navigator.serviceWorker.ready,
                 new Promise(resolve => setTimeout(() => resolve(reg), 4000)),
             ]);
-            btn._reg = activeReg;
         } catch (e) {
-            console.error('[push] Cannot initialize SW for toggle', e);
+            console.error('[push] Cannot init SW', e);
             return;
         }
     }
 
     const reg = btn._reg;
-    const pm  = reg?.pushManager ?? reg?.active?.pushManager ?? null;
+    const pm  = await _getPushManager(reg);
     if (!pm) {
         console.warn('[push] pushManager not available');
         return;
@@ -90,6 +97,7 @@ async function pushToggle() {
         const sub = await pm.getSubscription();
 
         if (sub) {
+            // Désabonnement
             await sub.unsubscribe();
             await fetch('/api/api_push_subscribe.php', {
                 method: 'DELETE',
@@ -98,13 +106,15 @@ async function pushToggle() {
             });
             btn.textContent = '🔕 Push OFF';
             btn.title = 'Activer les notifications push';
+
         } else {
+            // Abonnement
             const perm = await Notification.requestPermission();
             if (perm !== 'granted') return;
 
             const newSub = await pm.subscribe({
                 userVisibleOnly: true,
-                applicationServerKey: urlBase64ToUint8Array(window.VAPID_PUBLIC_KEY),
+                applicationServerKey: _urlBase64ToUint8Array(window.VAPID_PUBLIC_KEY),
             });
 
             const { endpoint, keys } = newSub.toJSON();
@@ -129,7 +139,7 @@ async function pushToggle() {
     }
 }
 
-function urlBase64ToUint8Array(base64String) {
+function _urlBase64ToUint8Array(base64String) {
     const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
     const base64  = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
     const raw     = atob(base64);
