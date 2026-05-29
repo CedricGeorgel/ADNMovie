@@ -3,10 +3,11 @@
  * API_KONAMI.PHP — Déclenché par le Konami Code
  * Attribue le badge ANOMALY_X3 si pas encore obtenu.
  */
-session_start();
 header('Content-Type: application/json');
 require_once __DIR__ . '/../config/settings.php';
 require_once __DIR__ . '/../functions/core_db.php';
+require_once __DIR__ . '/auth_helpers.php';
+start_persistent_session();
 
 if (!isset($_SESSION['user_id'])) {
     echo json_encode(['badge' => false]);

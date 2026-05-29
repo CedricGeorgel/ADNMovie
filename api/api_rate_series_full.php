@@ -11,7 +11,6 @@
  * → si la saison n'existe que chez ORACLE (ou d'autres users), on crée la ligne.
  */
 
-session_start();
 header('Content-Type: application/json');
 
 require_once __DIR__ . '/../config/settings.php';

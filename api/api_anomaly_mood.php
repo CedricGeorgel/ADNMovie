@@ -4,11 +4,12 @@
  * Retourne des films très aimés par la communauté qui contredisent l'ADN de l'utilisateur.
  * Logique : ADN inversé (scores × -1) × taux de like élevé.
  */
-session_start();
 header('Content-Type: text/html; charset=utf-8');
 
 require_once __DIR__ . '/../config/settings.php';
 require_once __DIR__ . '/../functions/core_db.php';
+require_once __DIR__ . '/auth_helpers.php';
+start_persistent_session();
 require_once __DIR__ . '/../functions/formatting.php';
 require_once __DIR__ . '/../components/movie-card.php';
 

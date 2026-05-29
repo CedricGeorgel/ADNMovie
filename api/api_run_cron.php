@@ -3,11 +3,12 @@
  * API_RUN_CRON.PHP
  * Déclenche manuellement le cron master depuis l'interface admin.
  */
-session_start();
 header('Content-Type: application/json');
 
 require_once __DIR__ . '/../config/settings.php';
 require_once __DIR__ . '/../functions/core_db.php';
+require_once __DIR__ . '/auth_helpers.php';
+start_persistent_session();
 
 if (!isset($_SESSION['user_id'])) { echo json_encode(['success'=>false,'message'=>'Non connecté']); exit; }
 $me = db_fetch_one('SELECT role FROM users WHERE id = ?', [$_SESSION['user_id']]);

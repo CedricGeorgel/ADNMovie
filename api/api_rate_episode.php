@@ -8,7 +8,6 @@
  *                   → update_user_series_dna
  *                   → update_series_dna
  */
-session_start();
 header('Content-Type: application/json');
 
 require_once __DIR__ . '/../config/settings.php';
