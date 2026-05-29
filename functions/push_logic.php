@@ -162,28 +162,39 @@ function push_send_one(array $subscription, string $title, string $body, string 
 
         $ch = curl_init($subscription['endpoint']);
         curl_setopt_array($ch, [
-            CURLOPT_POST           => true,
+            CURLOPT_CUSTOMREQUEST  => 'POST',   // évite que curl écrase Content-Type
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT        => 10,
             CURLOPT_HTTPHEADER     => [
                 'TTL: 86400',
                 'Content-Type: application/octet-stream',
                 'Content-Encoding: aes128gcm',
+                'Content-Length: ' . strlen($enc),
                 'Authorization: vapid t=' . $jwt . ',k=' . $keys['public'],
             ],
             CURLOPT_POSTFIELDS => $enc,
         ]);
-        curl_exec($ch);
-        $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $responseBody = curl_exec($ch);
+        $code         = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError    = curl_error($ch);
         curl_close($ch);
 
-        // 410 Gone = subscription expired, remove it
+        // Log les erreurs pour diagnostic (visible dans les logs PHP d'o2switch)
+        if ($code === 0 || $code >= 400) {
+            $endpoint = substr($subscription['endpoint'], 0, 60) . '…';
+            error_log("[push] send failed — HTTP {$code} — endpoint: {$endpoint}"
+                . ($curlError ? " — curl: {$curlError}" : '')
+                . ($responseBody ? " — response: " . substr($responseBody, 0, 200) : ''));
+        }
+
+        // 410 Gone / 404 = abonnement expiré, supprimer
         if ($code === 410 || $code === 404) {
             db_execute('DELETE FROM push_subscriptions WHERE endpoint = ?', [$subscription['endpoint']]);
         }
 
         return $code >= 200 && $code < 300;
-    } catch (Throwable) {
+    } catch (Throwable $e) {
+        error_log('[push] push_send_one exception: ' . $e->getMessage());
         return false;
     }
 }

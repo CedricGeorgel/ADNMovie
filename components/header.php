@@ -93,7 +93,7 @@ function renderHeader($user = null) {
                 <div class="notif-panel-header">
                     <span>Notifications</span>
                     <div style="display:flex;align-items:center;gap:8px;">
-                        <button id="push-optin-btn" class="notif-mark-all" onclick="pushToggle()" style="display:none;" title="Activer les notifications push"></button>
+                        <button id="push-optin-btn" class="notif-mark-all" onclick="pushToggle()" title="Notifications push">🔕 Push</button>
                         <button class="notif-mark-all" onclick="notifMarkAllRead()">Tout lire</button>
                     </div>
                 </div>
