@@ -42,6 +42,31 @@ function get_movie_smart(int $tmdbId): ?array {
             $movie['id']     = $movie['tmdb_id'];
             $movie['genres'] = $movie['genres']    ? json_decode($movie['genres'],    true) : [];
             $movie['cast']   = $movie['cast_data'] ? json_decode($movie['cast_data'], true) : [];
+
+            // Poster local manquant sur disque → re-télécharge depuis TMDB et met à jour la BDD
+            $posterPath = $movie['poster'] ?? '';
+            if (
+                $posterPath &&
+                str_starts_with($posterPath, 'assets/movie_posters/') &&
+                !file_exists(__DIR__ . '/../' . $posterPath)
+            ) {
+                $tmdbForPoster = fetch_tmdb_movie($tmdbId);
+                $remoteUrl     = $tmdbForPoster['poster'] ?? null;
+                if ($remoteUrl && str_starts_with($remoteUrl, 'http')) {
+                    $posterDir  = __DIR__ . '/../assets/movie_posters/';
+                    $posterFile = $posterDir . $tmdbId . '.jpg';
+                    if (!is_dir($posterDir)) mkdir($posterDir, 0755, true);
+                    $data = @file_get_contents($remoteUrl, false, stream_context_create(['http' => ['timeout' => 8]]));
+                    if ($data && strlen($data) > 1000) {
+                        file_put_contents($posterFile, $data);
+                        // Chemin déjà correct en BDD, pas besoin de UPDATE
+                    } else {
+                        // Téléchargement échoué : fallback URL TMDB directe (pas de UPDATE BDD)
+                        $movie['poster'] = $remoteUrl;
+                    }
+                }
+            }
+
             return $movie;
         }
     }
