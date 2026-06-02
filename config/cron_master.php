@@ -43,6 +43,7 @@ $report = [
         'notifications_purged'   => null, // int — tâche 8
         'access_attempts_purged' => null, // int — tâche 9
         'new_episodes_notified'  => null, // int — tâche 10
+        'watchlist_notified'     => null, // int — tâche 11
     ],
     'errors'         => [],
 ];
@@ -495,6 +496,27 @@ try {
     $report['errors'][] = "Tâche 10 : " . $e->getMessage();
     $report['tasks']['new_episodes_notified'] = 0;
     echo "[ERREUR] Tâche 10 : " . $e->getMessage() . "\n\n";
+}
+
+
+// ── TÂCHE 11 : Watchlist films × providers abonnés ──────────────────────────
+echo "-> Lancement Tâche 11 : Watchlist films × providers abonnés...\n";
+flush();
+try {
+    if (!function_exists('check_watchlist_provider_and_notify')) {
+        require_once __DIR__ . '/../functions/series_logic.php';
+    }
+    ob_start();
+    check_watchlist_provider_and_notify();
+    $output = ob_get_clean();
+    echo $output;
+    $notifiedCount = substr_count($output, 'Nouveau :');
+    $report['tasks']['watchlist_notified'] = $notifiedCount;
+    echo "[OK] Watchlist providers terminée ($notifiedCount notifications envoyées).\n\n";
+} catch (Exception $e) {
+    $report['errors'][] = "Tâche 11 : " . $e->getMessage();
+    $report['tasks']['watchlist_notified'] = 0;
+    echo "[ERREUR] Tâche 11 : " . $e->getMessage() . "\n\n";
 }
 
 

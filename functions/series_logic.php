@@ -22,9 +22,14 @@ function check_new_episodes_and_notify(): void
         return;
     }
 
-    // Fenêtre : hier → demain (tolérance si le cron tourne en fin/début de journée)
+    if (!function_exists('send_push_to_user')) {
+        require_once __DIR__ . '/push_logic.php';
+    }
+
+    // Fenêtre : hier → aujourd'hui inclus
+    // On exclut demain pour ne pas notifier des épisodes pré-remplis par TMDB avant diffusion.
     $windowStart = date('Y-m-d', strtotime('-1 day'));
-    $windowEnd   = date('Y-m-d', strtotime('+1 day'));
+    $windowEnd   = date('Y-m-d');
 
     // Séries qui ont au moins un follower
     $seriesWithFollowers = db_fetch_all(
@@ -90,6 +95,7 @@ function check_new_episodes_and_notify(): void
                      VALUES (?, "new_episode", ?, ?, ?, 0, NOW())',
                     [$userId, $sourceId, $notifTitle, $notifLink]
                 );
+                send_push_to_user($userId, 'ADN Movie', $notifTitle, $notifLink);
 
                 echo "[Tâche 10] Nouveau : {$notifTitle} → user {$userId}\n";
             }
@@ -123,17 +129,20 @@ function _fetch_new_episodes_from_tmdb(int $tmdbId, int $totalSaisons, string $w
         if (!$seasonData || empty($seasonData['episodes'])) continue;
 
         foreach ($seasonData['episodes'] as $ep) {
-            $airDate = $ep['air_date'] ?? null;
+            $airDate  = $ep['air_date'] ?? null;
+            $overview = trim($ep['overview'] ?? '');
             if (!$airDate) continue;
-            // Filtre : épisode diffusé dans la fenêtre de détection
-            if ($airDate >= $windowStart && $airDate <= $windowEnd) {
-                $newEpisodes[] = [
-                    'season'   => $s,
-                    'episode'  => $ep['episode_number'],
-                    'name'     => $ep['name'] ?? '',
-                    'air_date' => $airDate,
-                ];
-            }
+            // Filtre date : épisode dans la fenêtre de détection
+            if ($airDate < $windowStart || $airDate > $windowEnd) continue;
+            // Filtre synopsis : TMDB pré-remplit les épisodes futurs sans synopsis.
+            // Un overview vide = épisode pas encore diffusé → on ignore.
+            if ($overview === '') continue;
+            $newEpisodes[] = [
+                'season'   => $s,
+                'episode'  => $ep['episode_number'],
+                'name'     => $ep['name'] ?? '',
+                'air_date' => $airDate,
+            ];
         }
     }
 
@@ -157,4 +166,74 @@ function _upsert_episode(int $seriesId, array $ep): void
              name     = VALUES(name)',
         [$seriesId, $ep['season'], $ep['episode'], $ep['air_date'], $ep['name']]
     );
+}
+
+/**
+ * Tâche 11 : Watchlist films × providers abonnés.
+ * Pour chaque film en wishlist d'un utilisateur, si ce film est disponible
+ * en flatrate sur une plateforme à laquelle l'utilisateur est abonné,
+ * on envoie une notification (une seule fois par couple film+provider).
+ */
+function check_watchlist_provider_and_notify(): void
+{
+    if (!function_exists('send_push_to_user')) {
+        require_once __DIR__ . '/push_logic.php';
+    }
+
+    // Films en wishlist avec leurs données providers et les plateformes de l'utilisateur
+    $rows = db_fetch_all(
+        "SELECT w.user_id, w.movie_id, m.title, m.providers_data, u.user_platforms
+         FROM user_wishlist w
+         JOIN movies m ON m.tmdb_id = w.movie_id
+         JOIN users u ON u.id = w.user_id
+         WHERE w.content_type = 'movie'
+           AND m.providers_data IS NOT NULL
+           AND m.providers_data != '[]'
+           AND u.user_platforms IS NOT NULL
+           AND u.user_platforms != '[]'"
+    );
+
+    $notified = 0;
+
+    foreach ($rows as $row) {
+        $userId        = $row['user_id'];
+        $movieId       = (int)$row['movie_id'];
+        $title         = $row['title'];
+        $subscribedIds = array_map('intval', json_decode($row['user_platforms'] ?? '[]', true) ?: []);
+        if (empty($subscribedIds)) continue;
+
+        $providers = json_decode($row['providers_data'], true) ?: [];
+        $flatrate  = $providers['flatrate'] ?? [];
+        if (empty($flatrate)) continue;
+
+        foreach ($flatrate as $p) {
+            $providerId = (int)$p['provider_id'];
+            if (!in_array($providerId, $subscribedIds, true)) continue;
+
+            $sourceId = "wp_{$movieId}_{$providerId}";
+
+            // Idempotence : une seule notif par film+provider
+            $already = db_fetch_one(
+                'SELECT 1 FROM notifications WHERE user_id = ? AND source_id = ? AND type = "watchlist_provider"',
+                [$userId, $sourceId]
+            );
+            if ($already) continue;
+
+            $providerName = $p['provider_name'] ?? "votre plateforme";
+            $notifTitle   = "« {$title} » est disponible sur {$providerName}";
+            $notifLink    = "/fiche.php?id={$movieId}";
+
+            db_execute(
+                'INSERT INTO notifications (user_id, type, source_id, title, link, is_read, created_at)
+                 VALUES (?, "watchlist_provider", ?, ?, ?, 0, NOW())',
+                [$userId, $sourceId, $notifTitle, $notifLink]
+            );
+            send_push_to_user($userId, 'ADN Movie', $notifTitle, $notifLink);
+
+            echo "[Tâche 11] Nouveau : {$notifTitle} → user {$userId}\n";
+            $notified++;
+        }
+    }
+
+    echo "[Tâche 11] Vérification watchlist terminée ($notified notifications envoyées).\n";
 }
