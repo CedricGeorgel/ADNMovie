@@ -185,7 +185,7 @@ function check_watchlist_provider_and_notify(): void
         "SELECT w.user_id, w.movie_id, m.title, m.providers_data, u.user_platforms
          FROM user_wishlist w
          JOIN movies m ON m.tmdb_id = w.movie_id
-         JOIN users u ON u.id = w.user_id
+         JOIN users u ON u.id COLLATE utf8mb4_unicode_ci = w.user_id COLLATE utf8mb4_unicode_ci
          WHERE w.content_type = 'movie'
            AND m.providers_data IS NOT NULL
            AND m.providers_data != '[]'

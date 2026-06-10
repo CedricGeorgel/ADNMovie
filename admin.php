@@ -350,6 +350,48 @@ $userActivity = array_column($activityRows, 'cnt', 'user_id');
                                 <?php endif; ?>
                             </div>
 
+                            <div class="cron-task-row">
+                                <span class="cron-task-label">🧬 Snapshots ADN</span>
+                                <span class="cron-task-value <?= $cls($tasks['dna_snapshots_taken'] ?? null) ?>">
+                                    <?= $val($tasks['dna_snapshots_taken'] ?? null) ?>
+                                </span>
+                            </div>
+
+                            <div class="cron-task-row">
+                                <span class="cron-task-label">📡 Providers refreshés</span>
+                                <span class="cron-task-value <?= $cls($tasks['providers_refreshed'] ?? null) ?>">
+                                    <?= $val($tasks['providers_refreshed'] ?? null) ?>
+                                </span>
+                            </div>
+
+                            <div class="cron-task-row">
+                                <span class="cron-task-label">🔔 Notifs purgées</span>
+                                <span class="cron-task-value <?= $cls($tasks['notifications_purged'] ?? null) ?>">
+                                    <?= $val($tasks['notifications_purged'] ?? null) ?>
+                                </span>
+                            </div>
+
+                            <div class="cron-task-row">
+                                <span class="cron-task-label">🛡 Tentatives accès purgées</span>
+                                <span class="cron-task-value <?= $cls($tasks['access_attempts_purged'] ?? null) ?>">
+                                    <?= $val($tasks['access_attempts_purged'] ?? null) ?>
+                                </span>
+                            </div>
+
+                            <div class="cron-task-row">
+                                <span class="cron-task-label">📺 Épisodes notifiés</span>
+                                <span class="cron-task-value <?= $cls($tasks['new_episodes_notified'] ?? null) ?>">
+                                    <?= $val($tasks['new_episodes_notified'] ?? null) ?>
+                                </span>
+                            </div>
+
+                            <div class="cron-task-row">
+                                <span class="cron-task-label">🎞 Watchlist × providers</span>
+                                <span class="cron-task-value <?= $cls($tasks['watchlist_notified'] ?? null) ?>">
+                                    <?= $val($tasks['watchlist_notified'] ?? null) ?>
+                                </span>
+                            </div>
+
                             <?php if ($hasErrors): ?>
                             <div class="cron-errors-block">
                                 <?php foreach ($errors as $err): ?>
