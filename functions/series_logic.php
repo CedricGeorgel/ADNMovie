@@ -136,7 +136,7 @@ function check_new_episodes_and_notify(): void
         $seriesId     = (int)$serie['series_id'];
         $tmdbId       = (int)$serie['tmdb_id'];
         $title        = $serie['title'];
-        $totalSaisons = (int)($serie['total_seasons'] ?? 1);
+        $totalSaisons = max(1, (int)($serie['total_seasons'] ?? 1));
 
         // Récupère les épisodes récents depuis TMDB pour chaque saison
         $newEpisodes = _fetch_new_episodes_from_tmdb($tmdbId, $totalSaisons, $windowStart, $windowEnd);
@@ -209,19 +209,20 @@ function _fetch_new_episodes_from_tmdb(int $tmdbId, int $totalSaisons, string $w
 
     $newEpisodes = [];
 
+    // Minimum 1 saison même si total_seasons = 0 en BDD
+    $totalSaisons = max(1, $totalSaisons);
+
     for ($s = 1; $s <= $totalSaisons; $s++) {
         $seasonData = fetch_tmdb_season($tmdbId, $s);
         if (!$seasonData || empty($seasonData['episodes'])) continue;
 
         foreach ($seasonData['episodes'] as $ep) {
-            $airDate  = $ep['air_date'] ?? null;
-            $overview = trim($ep['overview'] ?? '');
+            $airDate = $ep['air_date'] ?? null;
             if (!$airDate) continue;
-            // Filtre date : épisode dans la fenêtre de détection
+            // Seul filtre : la date de diffusion est dans la fenêtre.
+            // On ne filtre PAS sur l'overview : TMDB peut ne pas avoir
+            // encore traduit le synopsis en FR le jour même de la diffusion.
             if ($airDate < $windowStart || $airDate > $windowEnd) continue;
-            // Filtre synopsis : TMDB pré-remplit les épisodes futurs sans synopsis.
-            // Un overview vide = épisode pas encore diffusé → on ignore.
-            if ($overview === '') continue;
             $newEpisodes[] = [
                 'season'   => $s,
                 'episode'  => $ep['episode_number'],
