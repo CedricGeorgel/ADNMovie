@@ -31,26 +31,26 @@ function check_new_episodes_and_notify(): void
     $windowStart = date('Y-m-d', strtotime('-1 day'));
     $windowEnd   = date('Y-m-d');
 
-    // Séries qui ont au moins un follower
+    // Séries présentes dans au moins une watchlist utilisateur
     $seriesWithFollowers = db_fetch_all(
         'SELECT DISTINCT s.id AS series_id, s.tmdb_id, s.title, s.total_seasons
-         FROM user_series_follow f
-         JOIN series s ON s.id = f.series_id
-         WHERE f.is_ended = 0',
+         FROM user_wishlist w
+         JOIN series s ON s.id = w.series_id
+         WHERE w.content_type = \'series\'',
         []
     );
 
     if (empty($seriesWithFollowers)) {
-        echo "[Tâche 10] Aucune série suivie active.\n";
+        echo "[Tâche 10] Aucune série en watchlist.\n";
         return;
     }
 
     echo "[Tâche 10] " . count($seriesWithFollowers) . " série(s) à vérifier.\n";
 
     foreach ($seriesWithFollowers as $serie) {
-        $seriesId    = (int)$serie['series_id'];
-        $tmdbId      = (int)$serie['tmdb_id'];
-        $title       = $serie['title'];
+        $seriesId     = (int)$serie['series_id'];
+        $tmdbId       = (int)$serie['tmdb_id'];
+        $title        = $serie['title'];
         $totalSaisons = (int)($serie['total_seasons'] ?? 1);
 
         // Récupère les épisodes récents depuis TMDB pour chaque saison
@@ -65,9 +65,9 @@ function check_new_episodes_and_notify(): void
             _upsert_episode($seriesId, $ep);
         }
 
-        // Followers à notifier (non-ended, pas encore notifiés pour cet épisode)
+        // Utilisateurs ayant cette série en watchlist
         $followers = db_fetch_all(
-            'SELECT user_id FROM user_series_follow WHERE series_id = ? AND is_ended = 0',
+            'SELECT user_id FROM user_wishlist WHERE series_id = ? AND content_type = \'series\'',
             [$seriesId]
         );
 
