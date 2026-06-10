@@ -42,6 +42,31 @@ function get_movie_smart(int $tmdbId): ?array {
             $movie['id']     = $movie['tmdb_id'];
             $movie['genres'] = $movie['genres']    ? json_decode($movie['genres'],    true) : [];
             $movie['cast']   = $movie['cast_data'] ? json_decode($movie['cast_data'], true) : [];
+
+            // Poster local manquant sur disque → re-télécharge depuis TMDB et met à jour la BDD
+            $posterPath = $movie['poster'] ?? '';
+            if (
+                $posterPath &&
+                str_starts_with($posterPath, 'assets/movie_posters/') &&
+                !file_exists(__DIR__ . '/../' . $posterPath)
+            ) {
+                $tmdbForPoster = fetch_tmdb_movie($tmdbId);
+                $remoteUrl     = $tmdbForPoster['poster'] ?? null;
+                if ($remoteUrl && str_starts_with($remoteUrl, 'http')) {
+                    $posterDir  = __DIR__ . '/../assets/movie_posters/';
+                    $posterFile = $posterDir . $tmdbId . '.jpg';
+                    if (!is_dir($posterDir)) mkdir($posterDir, 0755, true);
+                    $data = @file_get_contents($remoteUrl, false, stream_context_create(['http' => ['timeout' => 8]]));
+                    if ($data && strlen($data) > 1000) {
+                        file_put_contents($posterFile, $data);
+                        // Chemin déjà correct en BDD, pas besoin de UPDATE
+                    } else {
+                        // Téléchargement échoué : fallback URL TMDB directe (pas de UPDATE BDD)
+                        $movie['poster'] = $remoteUrl;
+                    }
+                }
+            }
+
             return $movie;
         }
     }
@@ -104,6 +129,62 @@ function get_movie_smart(int $tmdbId): ?array {
     }
 
     return array_merge($tmdb, ['id' => $tmdbId, 'tmdb_id' => $tmdbId]);
+}
+
+/**
+ * Charge ou crée une série : vérifie si le poster local est présent sur disque,
+ * re-télécharge depuis TMDB si nécessaire, et upsert title/poster/year en BDD.
+ *
+ * À appeler depuis fiche.php (type=tv) pour garder series.poster à jour.
+ * Retourne le chemin poster résolu (local si possible, URL TMDB en fallback).
+ */
+function sync_series_poster(int $tmdbId, string $tmdbPosterUrl): string
+{
+    $posterDir  = __DIR__ . '/../assets/series_posters/';
+    $posterFile = $posterDir . $tmdbId . '.jpg';
+    $localPath  = 'assets/series_posters/' . $tmdbId . '.jpg';
+
+    // Fichier local déjà présent → rien à faire
+    if (file_exists($posterFile)) {
+        return $localPath;
+    }
+
+    // Pas de fichier → tente de télécharger depuis TMDB
+    if ($tmdbPosterUrl && str_starts_with($tmdbPosterUrl, 'http')) {
+        if (!is_dir($posterDir)) mkdir($posterDir, 0755, true);
+        $data = @file_get_contents($tmdbPosterUrl, false, stream_context_create(['http' => ['timeout' => 8]]));
+        if ($data && strlen($data) > 1000) {
+            file_put_contents($posterFile, $data);
+            return $localPath;
+        }
+    }
+
+    // Téléchargement échoué → fallback URL TMDB directe
+    return $tmdbPosterUrl ?: 'assets/no-poster.svg';
+}
+
+/**
+ * Met à jour title / poster / year dans la table series depuis les données TMDB.
+ * Idempotent — ne touche qu'aux champs manquants ou au poster si le fichier local est absent.
+ */
+function upsert_series_metadata(int $tmdbId, array $tmdbData): void
+{
+    $posterUrl = sync_series_poster($tmdbId, $tmdbData['poster'] ?? '');
+
+    db_execute(
+        'INSERT INTO series (tmdb_id, title, poster, year, created_at)
+         VALUES (?, ?, ?, ?, NOW())
+         ON DUPLICATE KEY UPDATE
+             title  = IF(title  = "" OR title  IS NULL, VALUES(title),  title),
+             poster = VALUES(poster),
+             year   = IF(year   IS NULL,                VALUES(year),   year)',
+        [
+            $tmdbId,
+            $tmdbData['title'] ?? '',
+            $posterUrl,
+            $tmdbData['year']  ?? null,
+        ]
+    );
 }
 
 /**

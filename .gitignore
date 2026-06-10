@@ -16,3 +16,18 @@ assets/avatars/
 .vscode/
 .idea/
 .aider*
+assets/movie_posters/
+
+# Assets — ignorer tout sauf le code
+assets/*
+!assets/js/
+!assets/js/**
+!assets/index.style.css
+!assets/script.js
+!assets/style.css
+!assets/avatar-glitch.gif
+!assets/avatar-glitch.png
+!assets/default-avatar.jpg
+!assets/default-avatar.png
+!assets/fond.png
+!assets/no-poster.svg

@@ -1,11 +1,22 @@
 /**
- * SW.JS — Service Worker ADN Movie
- * Gère les Web Push notifications (RFC 8030 / RFC 8291).
+ * SW.JS — Service Worker ADN Movie (unique)
+ * Gère : PWA install + Web Push notifications.
+ * Pas de fetch interceptor : les requêtes PHP/API passent sans interférence.
  */
 
-const CACHE_NAME = 'adnmovie-v1';
+// ── Lifecycle ────────────────────────────────────────────────────────────────
 
-// ── Push event ────────────────────────────────────────────────────────────────
+self.addEventListener('install', () => {
+    // Force l'activation immédiate sans attendre la fermeture des onglets
+    self.skipWaiting();
+});
+
+self.addEventListener('activate', event => {
+    // Prend le contrôle de tous les clients immédiatement
+    event.waitUntil(clients.claim());
+});
+
+// ── Push event ───────────────────────────────────────────────────────────────
 
 self.addEventListener('push', event => {
     let data = { title: 'ADN Movie', body: 'Nouvelle notification', url: '/' };
@@ -24,7 +35,7 @@ self.addEventListener('push', event => {
     );
 });
 
-// ── Notification click ────────────────────────────────────────────────────────
+// ── Notification click ───────────────────────────────────────────────────────
 
 self.addEventListener('notificationclick', event => {
     event.notification.close();

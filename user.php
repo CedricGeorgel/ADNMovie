@@ -74,6 +74,7 @@ $profileStats = db_fetch_one(
 
 $friendsList = get_friends($userId);
 
+$signalPerdu = false;
 if ($isOwnProfile && !empty($_SESSION['signal_perdu'])) {
     $signalPerdu = true;
     unset($_SESSION['signal_perdu']);

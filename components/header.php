@@ -59,13 +59,17 @@ function renderHeader($user = null) {
         echo '<script src="assets/js/ui.js?v='  . $v  . '" defer></script>';
         echo '<script src="assets/script.js?v=' . $vs . '" defer></script>';
 
-        // VAPID public key + SW registration (logged-in users only)
+        // VAPID public key + push.js (logged-in users only)
+        // push.js est toujours chargé — il gère lui-même la visibilité du bouton
+        // selon la disponibilité de VAPID_PUBLIC_KEY et du support navigateur.
+        $vapidPublic = '';
         if ($user) {
             $vapidPublic = function_exists('get_vapid_public_key') ? get_vapid_public_key() : '';
             if ($vapidPublic) {
                 echo '<script>window.VAPID_PUBLIC_KEY=' . json_encode($vapidPublic) . ';</script>';
-                echo '<script src="assets/js/push.js?v=1" defer></script>';
             }
+            $vpush = file_exists(__DIR__ . '/../assets/js/push.js') ? filemtime(__DIR__ . '/../assets/js/push.js') : 1;
+            echo '<script src="assets/js/push.js?v=' . $vpush . '" defer></script>';
         }
     }
     ?>
@@ -92,7 +96,7 @@ function renderHeader($user = null) {
                 <div class="notif-panel-header">
                     <span>Notifications</span>
                     <div style="display:flex;align-items:center;gap:8px;">
-                        <button id="push-optin-btn" class="notif-mark-all" onclick="pushToggle()" style="display:none;" title="Activer les notifications push"></button>
+                        <button id="push-optin-btn" class="notif-mark-all" onclick="pushToggle()" title="Notifications push" style="display:none;">🔕 Push</button>
                         <button class="notif-mark-all" onclick="notifMarkAllRead()">Tout lire</button>
                     </div>
                 </div>
