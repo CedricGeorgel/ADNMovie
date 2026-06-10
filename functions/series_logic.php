@@ -48,6 +48,26 @@ function diagnose_episodes(string $from = '', string $to = ''): void
         $title        = $serie['title'];
         $totalSaisons = (int)($serie['total_seasons'] ?? 1);
 
+        echo "  — {$title} (tmdb:{$tmdbId}, saisons BDD: {$totalSaisons})\n";
+
+        // Scan détaillé saison par saison pour voir ce que TMDB retourne
+        if (!function_exists('fetch_tmdb_season')) {
+            require_once __DIR__ . '/api_tmdb.php';
+        }
+        for ($s = max(1, $totalSaisons - 1); $s <= $totalSaisons; $s++) {
+            $seasonData = fetch_tmdb_season($tmdbId, $s);
+            if (!$seasonData) { echo "    S{$s} → TMDB KO\n"; continue; }
+            foreach ($seasonData['episodes'] ?? [] as $ep) {
+                $airDate  = $ep['air_date'] ?? '?';
+                $overview = trim($ep['overview'] ?? '');
+                $inWindow = ($airDate >= $windowStart && $airDate <= $windowEnd);
+                if ($inWindow || ($airDate >= $windowStart && $airDate <= date('Y-m-d', strtotime($windowEnd . ' +3 days')))) {
+                    $flag = $inWindow ? ($overview !== '' ? '✓' : '⚠ no overview') : '(hors fenêtre)';
+                    echo "    S{$s}E{$ep['episode_number']} air:{$airDate} overview:" . ($overview !== '' ? 'oui' : 'vide') . " → {$flag}\n";
+                }
+            }
+        }
+
         $eps = _fetch_new_episodes_from_tmdb($tmdbId, $totalSaisons, $windowStart, $windowEnd);
 
         $followers = db_fetch_all(
@@ -57,7 +77,7 @@ function diagnose_episodes(string $from = '', string $to = ''): void
         $followerIds = array_column($followers, 'user_id');
 
         if (empty($eps)) {
-            echo "  ○ {$title} — aucun épisode dans la fenêtre\n";
+            echo "  ○ {$title} — aucun épisode retenu après filtres\n\n";
             continue;
         }
 
