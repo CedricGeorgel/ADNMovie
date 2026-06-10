@@ -15,6 +15,71 @@ if (!function_exists('db_fetch_all')) {
  * Appelée par cron_master.php — tâche 10.
  * La fenêtre de détection est J-1 → J (pour couvrir un cron quotidien).
  */
+/**
+ * Mode diagnostic : simule la tâche 10 sur une fenêtre de dates arbitraire
+ * sans rien écrire ni envoyer. Retourne un rapport lisible.
+ *
+ * @param string $from  Date de début YYYY-MM-DD (défaut : hier)
+ * @param string $to    Date de fin   YYYY-MM-DD (défaut : aujourd'hui)
+ */
+function diagnose_episodes(string $from = '', string $to = ''): void
+{
+    if (!defined('TMDB_API_KEY') || empty(TMDB_API_KEY)) {
+        echo "[Diagnostic] Clé TMDB_API_KEY manquante.\n"; return;
+    }
+    $windowStart = $from ?: date('Y-m-d', strtotime('-1 day'));
+    $windowEnd   = $to   ?: date('Y-m-d');
+
+    echo "[Diagnostic] Fenêtre : {$windowStart} → {$windowEnd}\n\n";
+
+    $series = db_fetch_all(
+        'SELECT DISTINCT s.id AS series_id, s.tmdb_id, s.title, s.total_seasons
+         FROM user_wishlist w
+         JOIN series s ON s.id = w.series_id
+         WHERE w.content_type = \'series\'', []
+    );
+
+    if (empty($series)) { echo "[Diagnostic] Aucune série en watchlist.\n"; return; }
+    echo "[Diagnostic] " . count($series) . " série(s) en watchlist.\n\n";
+
+    foreach ($series as $serie) {
+        $seriesId     = (int)$serie['series_id'];
+        $tmdbId       = (int)$serie['tmdb_id'];
+        $title        = $serie['title'];
+        $totalSaisons = (int)($serie['total_seasons'] ?? 1);
+
+        $eps = _fetch_new_episodes_from_tmdb($tmdbId, $totalSaisons, $windowStart, $windowEnd);
+
+        $followers = db_fetch_all(
+            'SELECT user_id FROM user_wishlist WHERE series_id = ? AND content_type = \'series\'',
+            [$seriesId]
+        );
+        $followerIds = array_column($followers, 'user_id');
+
+        if (empty($eps)) {
+            echo "  ○ {$title} — aucun épisode dans la fenêtre\n";
+            continue;
+        }
+
+        foreach ($eps as $ep) {
+            $epLabel    = 'S' . str_pad($ep['season'], 2, '0', STR_PAD_LEFT)
+                        . 'E' . str_pad($ep['episode'], 2, '0', STR_PAD_LEFT);
+            $sourceId   = "ep_{$seriesId}_{$ep['season']}_{$ep['episode']}";
+            echo "  ✓ {$title} · {$epLabel}" . ($ep['name'] ? " — {$ep['name']}" : '') . " ({$ep['air_date']})\n";
+            echo "    → " . count($followerIds) . " user(s) à notifier : [" . implode(', ', $followerIds) . "]\n";
+            foreach ($followerIds as $uid) {
+                $already = db_fetch_one(
+                    'SELECT 1 FROM notifications WHERE user_id = ? AND source_id = ? AND type = "new_episode"',
+                    [$uid, $sourceId]
+                );
+                echo "    · user {$uid} — " . ($already ? '⚠ déjà notifié' : '✉ sera notifié') . "\n";
+            }
+        }
+        echo "\n";
+    }
+    echo "[Diagnostic] Terminé — aucune notification envoyée.\n";
+}
+
 function check_new_episodes_and_notify(): void
 {
     if (!defined('TMDB_API_KEY') || empty(TMDB_API_KEY)) {

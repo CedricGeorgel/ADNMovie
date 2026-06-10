@@ -479,19 +479,33 @@ try {
 }
 
 // ── TÂCHE 10 : Vérification nouveaux épisodes séries ───────────────────────────
+// ?dryrun=1            → diagnostic sans envoi, fenêtre J-1→J
+// ?dryrun=1&date=YYYY-MM-DD → diagnostic sur une date précise
 echo "-> Lancement Tâche 10 : Vérification nouveaux épisodes séries...\n";
 flush();
 try {
     if (!function_exists('check_new_episodes_and_notify')) {
         require_once __DIR__ . '/../functions/series_logic.php';
     }
-    ob_start();
-    check_new_episodes_and_notify();
-    $output = ob_get_clean();
-    echo $output;
-    $notifiedCount = substr_count($output, 'Nouveau :');
-    $report['tasks']['new_episodes_notified'] = $notifiedCount;
-    echo "[OK] Vérification épisodes terminée ($notifiedCount notifications envoyées).\n\n";
+
+    $isDryRun = !$isServerCron && isset($_GET['dryrun']);
+    if ($isDryRun) {
+        $date  = preg_replace('/[^0-9\-]/', '', $_GET['date'] ?? '');
+        $from  = $date ?: date('Y-m-d', strtotime('-1 day'));
+        $to    = $date ?: date('Y-m-d');
+        echo "[Mode DIAGNOSTIC — aucune notif envoyée]\n\n";
+        diagnose_episodes($from, $to);
+        $report['tasks']['new_episodes_notified'] = '(dry-run)';
+        echo "\n[OK] Diagnostic terminé.\n\n";
+    } else {
+        ob_start();
+        check_new_episodes_and_notify();
+        $output = ob_get_clean();
+        echo $output;
+        $notifiedCount = substr_count($output, 'Nouveau :');
+        $report['tasks']['new_episodes_notified'] = $notifiedCount;
+        echo "[OK] Vérification épisodes terminée ($notifiedCount notifications envoyées).\n\n";
+    }
 } catch (Exception $e) {
     $report['errors'][] = "Tâche 10 : " . $e->getMessage();
     $report['tasks']['new_episodes_notified'] = 0;
