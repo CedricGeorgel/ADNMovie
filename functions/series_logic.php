@@ -182,11 +182,15 @@ function check_watchlist_provider_and_notify(): void
 
     // Films en wishlist avec leurs données providers et les plateformes de l'utilisateur
     $rows = db_fetch_all(
-        "SELECT w.user_id, w.movie_id, m.title, m.providers_data, u.user_platforms
+        "SELECT
+             w.user_id, w.movie_id,
+             m.title, m.providers_data,
+             u.user_platforms
          FROM user_wishlist w
          JOIN movies m ON m.tmdb_id = w.movie_id
-         JOIN users u ON u.id COLLATE utf8mb4_unicode_ci = w.user_id COLLATE utf8mb4_unicode_ci
-         WHERE w.content_type = 'movie'
+         JOIN users u ON CONVERT(u.id USING utf8mb4)       COLLATE utf8mb4_unicode_ci
+                       = CONVERT(w.user_id USING utf8mb4)  COLLATE utf8mb4_unicode_ci
+         WHERE CONVERT(w.content_type USING utf8mb4) COLLATE utf8mb4_unicode_ci = 'movie'
            AND m.providers_data IS NOT NULL
            AND m.providers_data != '[]'
            AND u.user_platforms IS NOT NULL
