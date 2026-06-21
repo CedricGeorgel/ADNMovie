@@ -40,23 +40,44 @@ $userId = $_SESSION['user_id'] ?? null;
 // ── GET ───────────────────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $contentId = (int)($_GET['content_id'] ?? 0);
-    $offset    = max(0, (int)($_GET['offset'] ?? 0));
-    if (!$contentId) { echo json_encode(['success' => false]); exit; }
+    if (!$contentId) { echo json_encode(['success' => false, 'comments' => []]); exit; }
+
+    $isAdmin    = has_role('moderator');
+    $isLoggedIn = isset($userId);
 
     $rows = db_fetch_all(
-        'SELECT cc.id, cc.content_id, cc.user_id, cc.parent_id, cc.body, cc.created_at,
+        'SELECT cc.id, cc.content_id, cc.user_id, cc.parent_id, cc.body, cc.created_at, cc.is_censored,
                 u.username, u.avatar, u.role
          FROM content_comments cc
          JOIN users u ON u.id = cc.user_id
          WHERE cc.content_id = ?
-         ORDER BY cc.created_at ASC
-         LIMIT 30 OFFSET ?',
-        [$contentId, $offset]
+         ORDER BY cc.created_at ASC',
+        [$contentId]
     ) ?: [];
 
-    foreach ($rows as &$r) { $r['body'] = resolve_refs($r['body']); }
-    unset($r);
-    echo json_encode(['success' => true, 'comments' => $rows, 'has_more' => count($rows) === 30]);
+    require_once __DIR__ . '/../components/comment.php';
+    $comments = [];
+    foreach ($rows as $r) {
+        $shield = '';
+        if (in_array($r['role'], ['admin','superadmin'])) $shield = '<span title="Administrateur" style="color:#f87171;font-size:0.65em;margin-left:3px;vertical-align:middle;">🛡</span>';
+        elseif ($r['role'] === 'moderator')               $shield = '<span title="Modérateur" style="color:#6ee7b7;font-size:0.65em;margin-left:3px;vertical-align:middle;">🛡</span>';
+
+        $resolved = resolve_refs($r['body']);
+        $comments[] = [
+            'id'           => (int)$r['id'],
+            'parent_id'    => $r['parent_id'] ? (int)$r['parent_id'] : null,
+            'user_id'      => $r['user_id'],
+            'username'     => $r['username'] ?? 'Anonyme',
+            'avatar'       => $r['avatar']   ?? 'assets/default-avatar.png',
+            'role_badge'   => $shield,
+            'content_html' => nl2br(formatCommentContent($resolved)),
+            'created_at'   => $r['created_at'],
+            'is_censored'  => (bool)($r['is_censored'] ?? false),
+            'is_admin'     => $isAdmin,
+            'is_logged_in' => $isLoggedIn,
+        ];
+    }
+    echo json_encode(['success' => true, 'comments' => $comments]);
     exit;
 }
 

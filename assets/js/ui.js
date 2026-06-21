@@ -385,6 +385,9 @@ function _renderCommentNode(node, depth) {
     </div>`;
 }
 
+window.buildCommentTree    = _buildCommentTree;
+window.renderCommentNode   = _renderCommentNode;
+
 window.toggleCommentThread = function(btn) {
     const item     = btn.closest('.comment-item');
     const children = item.querySelector('.c-children');
@@ -470,14 +473,15 @@ document.addEventListener('DOMContentLoaded', () => {
 /* ── COMMENTAIRES : RÉPONSE ──────────────────────────────────────────────── */
 
 window.replyToComment = function (commentId, username) {
-    const textarea  = document.getElementById('commentInput');
+    // Supporte commentInput (fiche.php) et ccInput (content.php)
+    const textarea  = document.getElementById('commentInput') || document.getElementById('ccInput');
     const parentEl  = document.getElementById('commentParentId');
-    const indicator = document.getElementById('commentReplyIndicator');
-    const label     = document.getElementById('commentReplyLabel');
+    const indicator = document.getElementById('commentReplyIndicator') || document.getElementById('ccReplyIndicator');
+    const label     = document.getElementById('commentReplyLabel')     || document.getElementById('ccReplyLabel');
     if (!textarea) return;
 
     if (parentEl)  parentEl.value = commentId;
-    textarea.value = '@' + username + ' ';
+    if (document.getElementById('commentInput')) textarea.value = '@' + username + ' ';
     if (label)     label.textContent = 'Réponse à @' + username;
     if (indicator) indicator.style.display = 'flex';
 
@@ -690,10 +694,22 @@ function formatChatText(text) {
     return text;
 }
 
-function appendMessage(msg, isMe) {
-    const chatContainer = document.getElementById('chatMessages');
-    const formattedText = formatChatText(msg.text);
-    const safeUsername  = String(msg.username).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+/**
+ * buildChatBubble(msg, isMe, opts) → HTMLElement
+ * Fonction partagée pour session, staff et DM.
+ *
+ * opts.replyInputId   : id du hidden input reply_to_id  (ex: 'chatReplyToId')
+ * opts.replyLabelId   : id du span label                (ex: 'chatReplyLabel')
+ * opts.replyIndicatorId : id du div indicateur          (ex: 'chatReplyIndicator')
+ * opts.chatInputId    : id du champ texte               (ex: 'chatInput')
+ * opts.formatFn       : fonction de formatage texte (défaut: formatChatText)
+ */
+window.buildChatBubble = function(msg, isMe, opts) {
+    opts = opts || {};
+    const fmt         = opts.formatFn || formatChatText;
+    const formattedText = fmt(msg.text || '');
+    const esc         = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const safeUsername  = esc(msg.username || '');
     const safeAvatar    = (msg.avatar || 'assets/default-avatar.png').replace(/"/g, '&quot;');
     const roleShield    = (msg.role === 'admin' || msg.role === 'superadmin')
         ? '<span title="Administrateur" style="color:#f87171;font-size:0.65em;margin-left:3px;vertical-align:middle;">🛡</span>'
@@ -701,85 +717,107 @@ function appendMessage(msg, isMe) {
             ? '<span title="Modérateur" style="color:#6ee7b7;font-size:0.65em;margin-left:3px;vertical-align:middle;">🛡</span>'
             : '';
 
-    // Bulle "reply preview" (Discord-style)
-    let replyBubble = '';
+    // Bulle reply preview (Discord-style)
+    let replyBubbleHtml = '';
     if (msg.reply_preview) {
-        const rUser = String(msg.reply_preview.username).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-        const rSnip = String(msg.reply_preview.snippet).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-        replyBubble = `
+        replyBubbleHtml = `
             <div style="font-size:0.68rem;color:var(--text-dim);border-left:2px solid var(--pastel-blue);
-                        padding:3px 8px;margin-bottom:4px;border-radius:0 4px 4px 0;
-                        background:rgba(167,199,231,0.06);max-width:100%;overflow:hidden;
+                        padding:3px 8px;margin-bottom:6px;border-radius:0 4px 4px 0;
+                        background:rgba(167,199,231,0.06);overflow:hidden;
                         white-space:nowrap;text-overflow:ellipsis;">
-                <span style="color:var(--pastel-blue);font-weight:700;">${rUser}</span>
-                <span style="margin-left:6px;opacity:0.7;">${rSnip}</span>
+                <span style="color:var(--pastel-blue);font-weight:700;">${esc(msg.reply_preview.username)}</span>
+                <span style="margin-left:6px;opacity:0.7;">${esc(msg.reply_preview.snippet)}</span>
             </div>`;
     }
 
     const wrapper = document.createElement('div');
     wrapper.dataset.msgId = msg.id;
-    wrapper.style.cssText = `
-        display: flex;
-        flex-direction: ${isMe ? 'row-reverse' : 'row'};
-        align-items: flex-end;
-        gap: 8px;
-        margin-bottom: 4px;
-    `;
+    wrapper.style.cssText = `display:flex;flex-direction:${isMe?'row-reverse':'row'};align-items:flex-end;gap:8px;margin-bottom:4px;`;
 
-    const isAnomaly = Math.floor(Math.random() * 24) === 0;
+    const isAnomaly  = Math.floor(Math.random() * 24) === 0;
     const avatarPage = isAnomaly ? 'anomaly' : 'adn';
-    const safeUser = String(msg.username).replace(/'/g, "\\'");
-    wrapper.innerHTML = `
-        <a href="${avatarPage}?id=${encodeURIComponent(msg.user_id)}"
-           style="flex-shrink:0; width:30px; height:30px; border-radius:50%; overflow:hidden; display:block; align-self:flex-end;">
-            <img src="${safeAvatar}"
-                 onerror="this.src='assets/default-avatar.png'"
-                 style="width:100%; height:100%; object-fit:cover;">
-        </a>
-        <div style="display:flex; flex-direction:column; align-items:${isMe ? 'flex-end' : 'flex-start'}; max-width:75%;">
-            <span style="font-size:0.6rem; font-weight:800; color:${isMe ? 'var(--pastel-blue)' : 'var(--text-dim)'}; margin-bottom:3px; padding:0 4px;">
-                ${safeUsername}${roleShield}
-                <span style="font-weight:400; color:rgba(255,255,255,0.2); font-family:monospace; margin-left:4px;">${msg.time}</span>
-            </span>
-            <div class="chat-bubble" style="
-                background:${isMe ? 'rgba(167,199,231,0.15)' : 'rgba(255,255,255,0.06)'};
-                border:1px solid ${isMe ? 'var(--pastel-blue)' : 'var(--border)'};
-                padding:8px 12px;
-                border-radius:${isMe ? '14px 14px 4px 14px' : '14px 14px 14px 4px'};
-                font-size:0.82rem; color:white; line-height:1.5; word-break:break-word;
-                position:relative; display:inline-block; width:auto;">
-                ${replyBubble}
-                ${formattedText}
-                <button onclick="replyChatMessage(${msg.id}, '${safeUser}')"
-                        title="Répondre"
-                        style="position:absolute;${isMe ? 'left:-26px' : 'right:-26px'};top:50%;transform:translateY(-50%);
-                               background:none;border:none;color:var(--text-dim);font-size:0.75rem;
-                               cursor:pointer;opacity:0;transition:opacity 0.15s;padding:4px;">↩</button>
-            </div>
-        </div>
-    `;
 
-    // Affiche le bouton reply au hover sur la bulle
-    const bubble = wrapper.querySelector('.chat-bubble');
-    const replyBtn = wrapper.querySelector('.chat-bubble button');
-    bubble.addEventListener('mouseenter', () => replyBtn.style.opacity = '1');
-    bubble.addEventListener('mouseleave', () => replyBtn.style.opacity = '0');
+    // Colonne (meta + bulle)
+    const col = document.createElement('div');
+    col.style.cssText = `display:flex;flex-direction:column;align-items:${isMe?'flex-end':'flex-start'};max-width:75%;`;
 
-    chatContainer.appendChild(wrapper);
+    // Avatar
+    const avatarLink = document.createElement('a');
+    avatarLink.href = `${avatarPage}?id=${encodeURIComponent(msg.user_id || '')}`;
+    avatarLink.style.cssText = 'flex-shrink:0;width:30px;height:30px;border-radius:50%;overflow:hidden;display:block;align-self:flex-end;';
+    avatarLink.innerHTML = `<img src="${safeAvatar}" onerror="this.src='assets/default-avatar.png'" style="width:100%;height:100%;object-fit:cover;">`;
+
+    // Meta (pseudo + heure)
+    const meta = document.createElement('span');
+    meta.style.cssText = `font-size:0.6rem;font-weight:800;color:${isMe?'var(--pastel-blue)':'var(--text-dim)'};margin-bottom:3px;padding:0 4px;`;
+    meta.innerHTML = `${safeUsername}${roleShield}<span style="font-weight:400;color:rgba(255,255,255,0.2);font-family:monospace;margin-left:4px;">${msg.time||''}</span>`;
+
+    // Bulle principale
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble';
+    bubble.style.cssText = `
+        background:${isMe?'rgba(167,199,231,0.15)':'rgba(255,255,255,0.06)'};
+        border:1px solid ${isMe?'var(--pastel-blue)':'var(--border)'};
+        padding:8px 12px;
+        border-radius:${isMe?'14px 14px 4px 14px':'14px 14px 14px 4px'};
+        font-size:0.82rem;color:white;line-height:1.5;word-break:break-word;
+        position:relative;width:fit-content;max-width:100%;`;
+    bubble.innerHTML = replyBubbleHtml + formattedText;
+
+    // Bouton reply (si opts fournis)
+    if (opts.replyInputId) {
+        const replyBtn = document.createElement('button');
+        replyBtn.textContent = '↩';
+        replyBtn.title = 'Répondre';
+        replyBtn.style.cssText = `position:absolute;${isMe?'left:-26px':'right:-26px'};top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-dim);font-size:0.75rem;cursor:pointer;opacity:0;transition:opacity 0.15s;padding:4px;`;
+        replyBtn.addEventListener('click', () => {
+            document.getElementById(opts.replyInputId).value = msg.id;
+            document.getElementById(opts.replyLabelId).textContent = '↩ ' + (msg.username || '');
+            const ind = document.getElementById(opts.replyIndicatorId);
+            if (ind) ind.style.display = 'flex';
+            const inp = document.getElementById(opts.chatInputId);
+            if (inp) inp.focus();
+        });
+        bubble.appendChild(replyBtn);
+        bubble.addEventListener('mouseenter', () => replyBtn.style.opacity = '1');
+        bubble.addEventListener('mouseleave', () => replyBtn.style.opacity = '0');
+    }
+
+    col.appendChild(meta);
+    col.appendChild(bubble);
+    wrapper.appendChild(avatarLink);
+    wrapper.appendChild(col);
+    return wrapper;
+};
+
+function appendMessage(msg, isMe) {
+    const container = document.getElementById('chatMessages');
+    if (!container) return;
+    container.appendChild(window.buildChatBubble(msg, isMe, {
+        replyInputId:      'chatReplyToId',
+        replyLabelId:      'chatReplyLabel',
+        replyIndicatorId:  'chatReplyIndicator',
+        chatInputId:       'chatInput',
+        formatFn:          formatChatText,
+    }));
 }
 
 window.replyChatMessage = function(msgId, username) {
     document.getElementById('chatReplyToId').value = msgId;
     document.getElementById('chatReplyLabel').textContent = '↩ ' + username;
     const indicator = document.getElementById('chatReplyIndicator');
-    indicator.style.display = 'flex';
-    document.getElementById('chatInput').focus();
+    if (indicator) indicator.style.display = 'flex';
+    const inp = document.getElementById('chatInput');
+    if (inp) inp.focus();
 };
 
 window.cancelChatReply = function() {
-    document.getElementById('chatReplyToId').value = '';
-    document.getElementById('chatReplyIndicator').style.display = 'none';
-    document.getElementById('chatReplyLabel').textContent = '';
+    const el = document.getElementById('chatReplyToId');
+    if (el) el.value = '';
+    const ind = document.getElementById('chatReplyIndicator');
+    if (ind) ind.style.display = 'none';
+    const lbl = document.getElementById('chatReplyLabel');
+    if (lbl) lbl.textContent = '';
 };
 
 // Le chat et la recherche sont initialisés par sessions.js

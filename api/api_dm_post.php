@@ -21,8 +21,9 @@ if (!$userId) {
     exit;
 }
 
-$toId = trim($_POST['to'] ?? '');
-$text = trim($_POST['message'] ?? '');
+$toId      = trim($_POST['to'] ?? '');
+$text      = trim($_POST['message'] ?? '');
+$replyToId = (int)($_POST['reply_to_id'] ?? 0) ?: null;
 
 if (!$toId || empty($text) || $toId === $userId) {
     echo json_encode(['success' => false, 'error' => 'Paramètres invalides']);
@@ -39,10 +40,15 @@ if ($status !== 'accepted') {
 $text      = censor_content($text)['content'];
 $encrypted = chat_encrypt($text);
 
+if ($replyToId) {
+    $ref = db_fetch_one('SELECT id FROM direct_messages WHERE id = ? AND (sender_id = ? OR receiver_id = ?)', [$replyToId, $userId, $userId]);
+    if (!$ref) $replyToId = null;
+}
+
 db_execute(
-    "INSERT INTO direct_messages (sender_id, receiver_id, body, is_read, sent_at)
-     VALUES (?, ?, ?, 0, NOW())",
-    [$userId, $toId, $encrypted]
+    "INSERT INTO direct_messages (sender_id, receiver_id, body, reply_to_id, is_read, sent_at)
+     VALUES (?, ?, ?, ?, 0, NOW())",
+    [$userId, $toId, $encrypted, $replyToId]
 );
 
 try {

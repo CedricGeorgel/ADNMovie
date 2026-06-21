@@ -202,45 +202,19 @@ function staffChatLoad(initial) {
 
 function staffChatBuildMsg(m) {
     const isSelf = m.user_id === (window._staffCurrentUserId ?? '');
-    const color  = ROLE_COLORS[m.role] ?? '#B8A7E7';
-    const wrap   = document.createElement('div');
-    wrap.dataset.msgId = m.id;
-    wrap.style.cssText = 'display:flex;gap:10px;align-items:flex-start;' + (isSelf ? 'flex-direction:row-reverse;' : '');
-    const avatar = document.createElement('img');
-    avatar.src   = m.avatar || 'assets/default-avatar.png';
-    avatar.style.cssText = 'width:30px;height:30px;border-radius:50%;object-fit:cover;flex-shrink:0;margin-top:2px;';
-    const col = document.createElement('div');
-    col.style.cssText = 'max-width:70%;display:flex;flex-direction:column;gap:3px;' + (isSelf ? 'align-items:flex-end;' : '');
-    const meta = document.createElement('div');
-    meta.style.cssText = 'font-size:0.62rem;color:var(--text-dim);display:flex;gap:6px;align-items:baseline;';
-    meta.innerHTML = `<span style="color:${color};font-weight:700;">${escHtml(m.username)}</span><span>${m.time}</span>`;
-
-    const bubble = document.createElement('div');
-    bubble.style.cssText = 'padding:8px 12px;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:10px;font-size:0.82rem;line-height:1.45;word-break:break-word;display:inline-block;width:auto;position:relative;';
-
-    if (m.reply_preview) {
-        const rp = document.createElement('div');
-        rp.style.cssText = 'font-size:0.68rem;color:var(--text-dim);border-left:2px solid var(--pastel-blue);padding:3px 8px;margin-bottom:6px;border-radius:0 4px 4px 0;background:rgba(167,199,231,0.06);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
-        rp.innerHTML = `<span style="color:var(--pastel-blue);font-weight:700;">${escHtml(m.reply_preview.username)}</span> <span style="opacity:0.7;">${escHtml(m.reply_preview.snippet)}</span>`;
-        bubble.appendChild(rp);
-    }
-
-    const textNode = document.createElement('span');
-    textNode.textContent = m.text;
-    bubble.appendChild(textNode);
-
-    const replyBtn = document.createElement('button');
-    replyBtn.textContent = '↩';
-    replyBtn.title = 'Répondre';
-    replyBtn.style.cssText = `position:absolute;${isSelf ? 'left:-26px' : 'right:-26px'};top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-dim);font-size:0.75rem;cursor:pointer;opacity:0;transition:opacity 0.15s;padding:4px;`;
-    replyBtn.onclick = () => staffChatReply(m.id, m.username);
-    bubble.appendChild(replyBtn);
-    bubble.addEventListener('mouseenter', () => replyBtn.style.opacity = '1');
-    bubble.addEventListener('mouseleave', () => replyBtn.style.opacity = '0');
-
-    col.append(meta, bubble);
-    wrap.append(avatar, col);
-    return wrap;
+    // Adapte le format pour buildChatBubble (texte brut → pas de formatChatText)
+    const msgAdapted = {
+        ...m,
+        text: m.text,
+        reply_preview: m.reply_preview || null,
+    };
+    return window.buildChatBubble(msgAdapted, isSelf, {
+        replyInputId:     'staff-chat-reply-id',
+        replyLabelId:     'staff-chat-reply-label',
+        replyIndicatorId: 'staff-chat-reply-indicator',
+        chatInputId:      'staff-chat-input',
+        formatFn:         s => escHtml(s),
+    });
 }
 
 function staffChatSend() {

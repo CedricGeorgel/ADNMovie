@@ -102,9 +102,21 @@ $conversations = get_dm_conversations($currentUserId);
                         </div>
 
                         <!-- Zone de saisie -->
-                        <div class="dm-input-area">
-                            <input type="text" id="dmInput" placeholder="Écrire un message…" maxlength="2000" autocomplete="off">
-                            <button onclick="sendDm()" class="btn-base active" style="padding:10px 18px;font-size:0.8rem;border-radius:12px;flex-shrink:0;">Envoyer</button>
+                        <div class="dm-input-area" style="flex-direction:column;gap:0;">
+                            <input type="hidden" id="dmReplyToId" value="">
+                            <div id="dmReplyIndicator"
+                                 style="display:none;align-items:center;justify-content:space-between;
+                                        padding:5px 10px;background:rgba(167,199,231,0.08);
+                                        border:1px solid rgba(167,199,231,0.2);border-radius:8px 8px 0 0;
+                                        font-size:0.7rem;color:var(--pastel-blue);margin-bottom:-1px;">
+                                <span id="dmReplyLabel" style="opacity:0.8;"></span>
+                                <button type="button" onclick="cancelDmReply()"
+                                        style="background:none;border:none;color:var(--text-dim);font-size:0.9rem;cursor:pointer;line-height:1;">✕</button>
+                            </div>
+                            <div style="display:flex;gap:8px;width:100%;">
+                                <input type="text" id="dmInput" placeholder="Écrire un message…" maxlength="2000" autocomplete="off" style="flex:1;">
+                                <button onclick="sendDm()" class="btn-base active" style="padding:10px 18px;font-size:0.8rem;border-radius:12px;flex-shrink:0;">Envoyer</button>
+                            </div>
                         </div>
 
                     <?php else: ?>
@@ -131,7 +143,8 @@ $conversations = get_dm_conversations($currentUserId);
         const CHAT_WITH  = <?= json_encode($activeWith) ?>;
         const CHAT_MY_ID = <?= json_encode($currentUserId) ?>;
     </script>
-    <script src="assets/js/chat_dm.js?v=<?= filemtime('assets/js/chat_dm.js') ?>"></script>
+    <script src="assets/js/ui.js?v=<?= filemtime('assets/js/ui.js') ?>" defer></script>
+    <script src="assets/js/chat_dm.js?v=<?= filemtime('assets/js/chat_dm.js') ?>" defer></script>
     <?php endif; ?>
 
     <!-- Mobile : gérer sidebar/thread -->
