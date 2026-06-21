@@ -752,9 +752,9 @@ window.buildChatBubble = function(msg, isMe, opts) {
     meta.style.cssText = `font-size:0.6rem;font-weight:800;color:${isMe?'var(--pastel-blue)':'var(--text-dim)'};margin-bottom:3px;padding:0 4px;`;
     meta.innerHTML = `${safeUsername}${roleShield}<span style="font-weight:400;color:rgba(255,255,255,0.2);font-family:monospace;margin-left:4px;">${msg.time||''}</span>`;
 
-    // Bulle principale
+    // Bulle principale (classe msg-bubble pour éviter collision avec .chat-bubble CSS du bouton flottant)
     const bubble = document.createElement('div');
-    bubble.className = 'chat-bubble';
+    bubble.className = 'msg-bubble';
     bubble.style.cssText = `
         background:${isMe?'rgba(167,199,231,0.15)':'rgba(255,255,255,0.06)'};
         border:1px solid ${isMe?'var(--pastel-blue)':'var(--border)'};
@@ -779,8 +779,8 @@ window.buildChatBubble = function(msg, isMe, opts) {
             if (inp) inp.focus();
         });
         bubble.appendChild(replyBtn);
-        bubble.addEventListener('mouseenter', () => replyBtn.style.opacity = '1');
-        bubble.addEventListener('mouseleave', () => replyBtn.style.opacity = '0');
+        bubble.addEventListener('mouseenter', () => { replyBtn.style.opacity = '1'; });
+        bubble.addEventListener('mouseleave', () => { replyBtn.style.opacity = '0'; });
     }
 
     col.appendChild(meta);

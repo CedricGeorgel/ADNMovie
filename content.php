@@ -201,6 +201,6 @@ const CC_IS_LOGGED      = <?= $currentUser ? 'true' : 'false' ?>;
 const CC_IS_ADMIN       = <?= (has_role('admin') || has_role('superadmin') || has_role('moderator')) ? 'true' : 'false' ?>;
 const CC_CURRENT_USER_ID = '<?= addslashes($currentUserId ?? '') ?>';
 </script>
-<script src="/assets/js/content.js?v=1" defer></script>
+<script src="/assets/js/content.js?v=<?= filemtime('assets/js/content.js') ?>" defer></script>
 </body>
 </html>

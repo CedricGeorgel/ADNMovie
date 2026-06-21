@@ -10,6 +10,7 @@ start_persistent_session();
 ini_set('display_errors', 0);
 require_once __DIR__ . '/../functions/core_db.php';
 require_once __DIR__ . '/../functions/moderation.php';
+require_once __DIR__ . '/../functions/auth_role_helper.php';
 
 header('Content-Type: application/json');
 
@@ -46,7 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $isLoggedIn = isset($userId);
 
     $rows = db_fetch_all(
-        'SELECT cc.id, cc.content_id, cc.user_id, cc.parent_id, cc.body, cc.created_at, cc.is_censored,
+        'SELECT cc.id, cc.content_id, cc.user_id, cc.parent_id, cc.body, cc.created_at,
                 u.username, u.avatar, u.role
          FROM content_comments cc
          JOIN users u ON u.id = cc.user_id
@@ -72,7 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             'role_badge'   => $shield,
             'content_html' => nl2br(formatCommentContent($resolved)),
             'created_at'   => $r['created_at'],
-            'is_censored'  => (bool)($r['is_censored'] ?? false),
+            'is_censored'  => false,
             'is_admin'     => $isAdmin,
             'is_logged_in' => $isLoggedIn,
         ];
