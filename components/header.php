@@ -160,9 +160,21 @@ function renderHeader($user = null) {
                     <span id="chatPanelThreadName" style="flex:1;"></span>
                 </div>
                 <div id="chatPanelMessages"></div>
-                <div class="chat-panel-input-area">
-                    <input type="text" id="chatPanelInput" placeholder="Écrire…" maxlength="2000" autocomplete="off">
-                    <button onclick="chatPanelSend()">→</button>
+                <div class="chat-panel-input-area" style="flex-direction:column;gap:0;">
+                    <input type="hidden" id="chatPanelReplyToId" value="">
+                    <div id="chatPanelReplyIndicator"
+                         style="display:none;align-items:center;justify-content:space-between;
+                                padding:4px 8px;background:rgba(167,199,231,0.08);
+                                border:1px solid rgba(167,199,231,0.2);border-radius:6px 6px 0 0;
+                                font-size:0.65rem;color:var(--pastel-blue);margin-bottom:-1px;">
+                        <span id="chatPanelReplyLabel" style="opacity:0.8;"></span>
+                        <button type="button" onclick="chatPanelCancelReply()"
+                                style="background:none;border:none;color:var(--text-dim);font-size:0.85rem;cursor:pointer;line-height:1;padding:0 2px;">✕</button>
+                    </div>
+                    <div style="display:flex;gap:6px;width:100%;">
+                        <input type="text" id="chatPanelInput" placeholder="Écrire…" maxlength="2000" autocomplete="off" style="flex:1;">
+                        <button onclick="chatPanelSend()">→</button>
+                    </div>
                 </div>
             </div>
 
@@ -176,16 +188,21 @@ function renderHeader($user = null) {
             let _panelTargetUrl = null;
 
             function buildBubble(msg) {
-                const wrap   = document.createElement('div');
+                if (window.buildChatBubble) {
+                    return window.buildChatBubble(msg, msg.is_mine, {
+                        replyInputId:     'chatPanelReplyToId',
+                        replyLabelId:     'chatPanelReplyLabel',
+                        replyIndicatorId: 'chatPanelReplyIndicator',
+                        chatInputId:      'chatPanelInput',
+                    });
+                }
+                // Fallback minimaliste si ui.js pas encore chargé
+                const wrap = document.createElement('div');
                 wrap.style.cssText = 'display:flex;flex-direction:column;align-items:' + (msg.is_mine ? 'flex-end' : 'flex-start') + ';';
                 const bubble = document.createElement('div');
-                bubble.className   = 'dm-bubble ' + (msg.is_mine ? 'mine' : 'theirs');
+                bubble.className = 'dm-bubble ' + (msg.is_mine ? 'mine' : 'theirs');
                 bubble.textContent = msg.text;
-                const time   = document.createElement('div');
-                time.className   = 'dm-time';
-                time.textContent = msg.time;
                 wrap.appendChild(bubble);
-                wrap.appendChild(time);
                 return wrap;
             }
 
@@ -264,17 +281,27 @@ function renderHeader($user = null) {
                 loadConversations();
             };
 
+            window.chatPanelCancelReply = function() {
+                document.getElementById('chatPanelReplyToId').value = '';
+                document.getElementById('chatPanelReplyIndicator').style.display = 'none';
+                document.getElementById('chatPanelReplyLabel').textContent = '';
+            };
+
             window.chatPanelSend = async function() {
-                const input = document.getElementById('chatPanelInput');
-                const text  = input.value.trim();
+                const input   = document.getElementById('chatPanelInput');
+                const text    = input.value.trim();
                 if (!text || !_panelWith) return;
+                const replyId = document.getElementById('chatPanelReplyToId')?.value || '';
                 input.value    = '';
                 input.disabled = true;
+                chatPanelCancelReply();
                 try {
+                    const params = { to: _panelWith, message: text };
+                    if (replyId) params.reply_to_id = replyId;
                     await fetch('api/api_dm_post.php', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                        body: new URLSearchParams({ to: _panelWith, message: text }),
+                        body: new URLSearchParams(params),
                     });
                     clearTimeout(_panelTimer);
                     pollThread();
