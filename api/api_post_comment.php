@@ -27,15 +27,13 @@ if ($movieId === '' || empty($content)) {
     exit;
 }
 
-// Un parent_id ne peut référencer qu'un commentaire du même film (pas de chaînes)
+// Valide que le parent existe bien dans le même film (profondeur illimitée)
 if ($parentId) {
     $parentRow = db_fetch_one(
-        'SELECT id, parent_id FROM movie_comments WHERE id = ? AND movie_id = ?',
+        'SELECT id FROM movie_comments WHERE id = ? AND movie_id = ?',
         [$parentId, $movieId]
     );
-    if (!$parentRow || !empty($parentRow['parent_id'])) {
-        $parentId = null; // parent invalide ou déjà une réponse → on ignore
-    }
+    if (!$parentRow) $parentId = null;
 }
 
 try {

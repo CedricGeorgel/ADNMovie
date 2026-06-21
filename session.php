@@ -181,11 +181,25 @@ $memberCount = count($room['members']);
                         <section id="section-chat" class="session-pane session-pane--chat">
                             <div class="pane-header"><h2>Flux de communication</h2></div>
                             <div id="chatMessages" class="chat-display"></div>
-                            <form id="chatForm" class="chat-input-area" onsubmit="return false;">
-                                <input type="text" id="chatInput" placeholder="Message… (@ mention)" autocomplete="off"
-                                       data-ac-context="session"
-                                       data-ac-room="<?= h($roomId) ?>">
-                                <button type="submit" class="btn-base active">OK</button>
+                            <form id="chatForm" class="chat-input-area" onsubmit="return false;" style="flex-direction:column;gap:0;">
+                                <input type="hidden" id="chatReplyToId" value="">
+                                <div id="chatReplyIndicator"
+                                     style="display:none;align-items:center;justify-content:space-between;
+                                            padding:5px 10px;background:rgba(167,199,231,0.08);
+                                            border:1px solid rgba(167,199,231,0.2);border-radius:8px 8px 0 0;
+                                            font-size:0.7rem;color:var(--pastel-blue);margin-bottom:-1px;">
+                                    <span id="chatReplyLabel" style="opacity:0.8;"></span>
+                                    <button type="button" onclick="cancelChatReply()"
+                                            style="background:none;border:none;color:var(--text-dim);
+                                                   font-size:0.9rem;cursor:pointer;line-height:1;">✕</button>
+                                </div>
+                                <div style="display:flex;gap:6px;width:100%;">
+                                    <input type="text" id="chatInput" placeholder="Message… (@ mention)" autocomplete="off"
+                                           data-ac-context="session"
+                                           data-ac-room="<?= h($roomId) ?>"
+                                           style="flex:1;">
+                                    <button type="submit" class="btn-base active">OK</button>
+                                </div>
                             </form>
                         </section>
 

@@ -308,42 +308,115 @@ function copyAdnLink(userId) {
     });
 }
 
-/* ── FICHE FILM : COMMENTAIRES & PURGE ─────────────────────────────────── */
+/* ── FICHE FILM : COMMENTAIRES (Reddit-style threads) ───────────────────── */
+
+const THREAD_COLORS = ['var(--pastel-blue)', '#a78bfa', '#34d399', '#fb923c', 'var(--text-dim)'];
+
+function _buildCommentTree(flat) {
+    const map = {};
+    flat.forEach(c => { map[c.id] = { ...c, children: [] }; });
+    const roots = [];
+    flat.forEach(c => {
+        if (c.parent_id && map[c.parent_id]) map[c.parent_id].children.push(map[c.id]);
+        else roots.push(map[c.id]);
+    });
+    roots.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    return roots;
+}
+
+function _renderCommentNode(node, depth) {
+    const color  = THREAD_COLORS[Math.min(depth, THREAD_COLORS.length - 1)];
+    const safe   = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const avatar = (node.avatar || 'assets/default-avatar.png').replace(/"/g,'&quot;');
+    const dt     = new Date(node.created_at).toLocaleString('fr-FR',
+        { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+    const hasChildren = node.children && node.children.length > 0;
+
+    const collapseBtn = hasChildren
+        ? `<button class="c-collapse" onclick="toggleCommentThread(this)"
+               title="Réduire" style="background:none;border:none;cursor:pointer;
+               color:${color};font-size:0.75rem;padding:0 2px;flex-shrink:0;align-self:flex-start;margin-top:14px;">▼</button>`
+        : `<span style="width:14px;flex-shrink:0;"></span>`;
+
+    const replyBtn = node.is_logged_in
+        ? `<button onclick="replyToComment(${node.id},'${safe(node.username).replace(/'/g,"\\'")}')"
+               class="comment-reply-btn">Répondre</button>`
+        : '';
+    const deleteBtn = node.is_admin
+        ? `<button onclick="deleteComment(${node.id})"
+               style="background:none;border:none;color:var(--danger);font-size:0.6rem;
+                      cursor:pointer;text-transform:uppercase;font-weight:800;opacity:0.5;"
+               onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.5">[Purger]</button>`
+        : '';
+
+    const childrenHtml = hasChildren
+        ? `<div class="c-children" style="margin-top:10px;border-left:2px solid ${color};padding-left:16px;">
+               ${node.children.map(c => _renderCommentNode(c, depth + 1)).join('')}
+           </div>`
+        : '';
+
+    return `
+    <div class="comment-item" data-id="${node.id}"
+         style="display:flex;gap:8px;margin-bottom:${depth===0?'22px':'10px'};">
+        ${collapseBtn}
+        <div style="flex-shrink:0;">
+            <a href="adn.php?id=${encodeURIComponent(node.user_id)}"
+               style="display:block;width:32px;height:32px;border-radius:50%;overflow:hidden;">
+                <img src="${avatar}" onerror="this.src='assets/default-avatar.png'"
+                     style="width:100%;height:100%;object-fit:cover;">
+            </a>
+        </div>
+        <div style="flex:1;min-width:0;">
+            <div style="display:flex;justify-content:space-between;align-items:center;
+                        margin-bottom:5px;flex-wrap:wrap;gap:4px;">
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <span style="font-weight:700;font-size:0.85rem;color:var(--text-main);">
+                        ${safe(node.username)}${node.role_badge}
+                    </span>
+                    <span style="font-size:0.65rem;color:var(--text-dim);font-family:monospace;">${dt}</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;">${replyBtn}${deleteBtn}</div>
+            </div>
+            <p style="font-size:0.85rem;line-height:1.5;color:var(--text-muted);margin:0;word-wrap:break-word;">
+                ${node.content_html}
+            </p>
+            ${childrenHtml}
+        </div>
+    </div>`;
+}
+
+window.toggleCommentThread = function(btn) {
+    const item     = btn.closest('.comment-item');
+    const children = item.querySelector('.c-children');
+    if (!children) return;
+    const collapsed = children.style.display === 'none';
+    children.style.display = collapsed ? '' : 'none';
+    btn.textContent = collapsed ? '▼' : '▶';
+};
 
 document.addEventListener('DOMContentLoaded', () => {
-    // 1. Scroll Infini & Commentaires
-    const commentsList = document.getElementById('commentsList');
-    const sentinel = document.getElementById('commentsSentinel');
-    const commentForm = document.getElementById('commentForm');
+    // 1. Commentaires en arbre
+    const commentsList    = document.getElementById('commentsList');
+    const commentForm     = document.getElementById('commentForm');
     const commentsContainer = document.querySelector('.movie-comments-section');
 
-    if (commentsList && sentinel && commentsContainer) {
+    if (commentsList && commentsContainer) {
         const movieId = commentsContainer.dataset.movieId;
-        let offset = 0;
-        let isFetching = false;
-        let hasMore = true;
 
         const loadComments = async () => {
-            if (isFetching || !hasMore) return;
-            isFetching = true;
             try {
-                const response = await fetch(`api/api_comments.php?movie_id=${movieId}&offset=${offset}`);
-                const html = await response.text();
-                if (html.trim() === '') {
-                    hasMore = false;
-                    if (offset === 0) commentsList.innerHTML = '<p style="color:var(--text-dim); font-size:0.8rem; font-style:italic;">Aucune analyse enregistrée.</p>';
-                } else {
-                    commentsList.insertAdjacentHTML('beforeend', html);
-                    offset += 10;
+                const res  = await fetch(`api/api_comments.php?movie_id=${encodeURIComponent(movieId)}`);
+                const data = await res.json();
+                if (!data.success || !data.comments.length) {
+                    commentsList.innerHTML = '<p style="color:var(--text-dim);font-size:0.8rem;font-style:italic;">Aucune analyse enregistrée.</p>';
+                    return;
                 }
-            } catch (err) { console.error("Erreur archives :", err); }
-            finally { isFetching = false; }
+                const tree = _buildCommentTree(data.comments);
+                commentsList.innerHTML = tree.map(n => _renderCommentNode(n, 0)).join('');
+            } catch(err) { console.error('Erreur archives :', err); }
         };
 
-        const observer = new IntersectionObserver((entries) => {
-            if (entries[0].isIntersecting) loadComments();
-        }, { rootMargin: '100px' });
-        observer.observe(sentinel);
+        loadComments();
 
         if (commentForm) {
             commentForm.addEventListener('submit', async (e) => {
@@ -353,11 +426,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const content  = input.value.trim();
                 if (!content) return;
 
-                const params = { movie_id: movieId, content: content };
+                const params = { movie_id: movieId, content };
                 if (parentEl && parentEl.value) params.parent_id = parentEl.value;
 
                 try {
-                    const res = await fetch('api/api_post_comment.php', {
+                    const res  = await fetch('api/api_post_comment.php', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                         body: new URLSearchParams(params)
@@ -367,12 +440,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         input.value = '';
                         if (parentEl) parentEl.value = '';
                         cancelReply();
-                        commentsList.innerHTML = '';
-                        offset = 0;
-                        hasMore = true;
                         loadComments();
                     } else { alert(data.message); }
-                } catch(err) { console.error("Erreur SyntaxError :", err); }
+                } catch(err) { console.error('Erreur post commentaire :', err); }
             });
         }
     }
@@ -400,13 +470,13 @@ document.addEventListener('DOMContentLoaded', () => {
 /* ── COMMENTAIRES : RÉPONSE ──────────────────────────────────────────────── */
 
 window.replyToComment = function (commentId, username) {
-    const textarea   = document.getElementById('commentInput');
-    const parentEl   = document.getElementById('commentParentId');
-    const indicator  = document.getElementById('commentReplyIndicator');
-    const label      = document.getElementById('commentReplyLabel');
+    const textarea  = document.getElementById('commentInput');
+    const parentEl  = document.getElementById('commentParentId');
+    const indicator = document.getElementById('commentReplyIndicator');
+    const label     = document.getElementById('commentReplyLabel');
     if (!textarea) return;
 
-    if (parentEl)  parentEl.value  = commentId;
+    if (parentEl)  parentEl.value = commentId;
     textarea.value = '@' + username + ' ';
     if (label)     label.textContent = 'Réponse à @' + username;
     if (indicator) indicator.style.display = 'flex';
@@ -527,13 +597,17 @@ function initSessionChat() {
         const text = input.value.trim();
         if (!text) return;
 
+        const replyToId = document.getElementById('chatReplyToId')?.value || '';
         input.value = '';
+        cancelChatReply();
 
         try {
+            const params = { 'room_id': roomId, 'message': text };
+            if (replyToId) params['reply_to_id'] = replyToId;
             await fetch('api/api_chat_post.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams({ 'room_id': roomId, 'message': text })
+                body: new URLSearchParams(params)
             });
             clearTimeout(pollingTimer);
             fetchNewMessages();
@@ -627,7 +701,23 @@ function appendMessage(msg, isMe) {
             ? '<span title="Modérateur" style="color:#6ee7b7;font-size:0.65em;margin-left:3px;vertical-align:middle;">🛡</span>'
             : '';
 
+    // Bulle "reply preview" (Discord-style)
+    let replyBubble = '';
+    if (msg.reply_preview) {
+        const rUser = String(msg.reply_preview.username).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        const rSnip = String(msg.reply_preview.snippet).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        replyBubble = `
+            <div style="font-size:0.68rem;color:var(--text-dim);border-left:2px solid var(--pastel-blue);
+                        padding:3px 8px;margin-bottom:4px;border-radius:0 4px 4px 0;
+                        background:rgba(167,199,231,0.06);max-width:100%;overflow:hidden;
+                        white-space:nowrap;text-overflow:ellipsis;">
+                <span style="color:var(--pastel-blue);font-weight:700;">${rUser}</span>
+                <span style="margin-left:6px;opacity:0.7;">${rSnip}</span>
+            </div>`;
+    }
+
     const wrapper = document.createElement('div');
+    wrapper.dataset.msgId = msg.id;
     wrapper.style.cssText = `
         display: flex;
         flex-direction: ${isMe ? 'row-reverse' : 'row'};
@@ -638,11 +728,12 @@ function appendMessage(msg, isMe) {
 
     const isAnomaly = Math.floor(Math.random() * 24) === 0;
     const avatarPage = isAnomaly ? 'anomaly' : 'adn';
+    const safeUser = String(msg.username).replace(/'/g, "\\'");
     wrapper.innerHTML = `
-        <a href="${avatarPage}?id=${encodeURIComponent(msg.user_id)}" 
+        <a href="${avatarPage}?id=${encodeURIComponent(msg.user_id)}"
            style="flex-shrink:0; width:30px; height:30px; border-radius:50%; overflow:hidden; display:block; align-self:flex-end;">
-            <img src="${safeAvatar}" 
-                 onerror="this.src='assets/default-avatar.png'" 
+            <img src="${safeAvatar}"
+                 onerror="this.src='assets/default-avatar.png'"
                  style="width:100%; height:100%; object-fit:cover;">
         </a>
         <div style="display:flex; flex-direction:column; align-items:${isMe ? 'flex-end' : 'flex-start'}; max-width:75%;">
@@ -650,19 +741,46 @@ function appendMessage(msg, isMe) {
                 ${safeUsername}${roleShield}
                 <span style="font-weight:400; color:rgba(255,255,255,0.2); font-family:monospace; margin-left:4px;">${msg.time}</span>
             </span>
-            <div style="
+            <div class="chat-bubble" style="
                 background:${isMe ? 'rgba(167,199,231,0.15)' : 'rgba(255,255,255,0.06)'};
                 border:1px solid ${isMe ? 'var(--pastel-blue)' : 'var(--border)'};
                 padding:8px 12px;
                 border-radius:${isMe ? '14px 14px 4px 14px' : '14px 14px 14px 4px'};
-                font-size:0.82rem; color:white; line-height:1.5; word-break:break-word;">
+                font-size:0.82rem; color:white; line-height:1.5; word-break:break-word;
+                position:relative;">
+                ${replyBubble}
                 ${formattedText}
+                <button onclick="replyChatMessage(${msg.id}, '${safeUser}')"
+                        title="Répondre"
+                        style="position:absolute;${isMe ? 'left:-26px' : 'right:-26px'};top:50%;transform:translateY(-50%);
+                               background:none;border:none;color:var(--text-dim);font-size:0.75rem;
+                               cursor:pointer;opacity:0;transition:opacity 0.15s;padding:4px;">↩</button>
             </div>
         </div>
     `;
 
+    // Affiche le bouton reply au hover sur la bulle
+    const bubble = wrapper.querySelector('.chat-bubble');
+    const replyBtn = wrapper.querySelector('.chat-bubble button');
+    bubble.addEventListener('mouseenter', () => replyBtn.style.opacity = '1');
+    bubble.addEventListener('mouseleave', () => replyBtn.style.opacity = '0');
+
     chatContainer.appendChild(wrapper);
 }
+
+window.replyChatMessage = function(msgId, username) {
+    document.getElementById('chatReplyToId').value = msgId;
+    document.getElementById('chatReplyLabel').textContent = '↩ ' + username;
+    const indicator = document.getElementById('chatReplyIndicator');
+    indicator.style.display = 'flex';
+    document.getElementById('chatInput').focus();
+};
+
+window.cancelChatReply = function() {
+    document.getElementById('chatReplyToId').value = '';
+    document.getElementById('chatReplyIndicator').style.display = 'none';
+    document.getElementById('chatReplyLabel').textContent = '';
+};
 
 // Le chat et la recherche sont initialisés par sessions.js
 // pour éviter les doublons d'écouteurs sur la page session.php
