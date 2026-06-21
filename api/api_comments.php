@@ -8,6 +8,8 @@ require_once __DIR__ . '/../functions/utils.php';
 require_once __DIR__ . '/../functions/core_db.php';
 require_once __DIR__ . '/../components/comment.php';
 
+start_persistent_session();
+
 ini_set('display_errors', 0);
 header('Content-Type: application/json');
 

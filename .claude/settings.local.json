@@ -14,7 +14,24 @@
       "Bash(grep -n 'seriesLocalId\\\\|$localId\\\\|$seriesId\\\\|series.*local\\\\|local.*series' '/Users/cedricgeorgel/Documents/Moovie Soirée Ciné/V2/fiche.php')",
       "Bash(grep -n '^$episode\\\\s*=\\\\|$episode ' '/Users/cedricgeorgel/Documents/Moovie Soirée Ciné/V2/fiche.php')",
       "Bash(grep -n '$episode' '/Users/cedricgeorgel/Documents/Moovie Soirée Ciné/V2/fiche.php')",
-      "Bash(grep 'GET\\\\|$season\\\\|$episode')"
+      "Bash(grep 'GET\\\\|$season\\\\|$episode')",
+      "Bash(git add *)",
+      "Bash(git commit -m 'fix: variable non initialisée $signalPerdu + cache poster séries *)",
+      "Bash(git commit -m 'fix: push button toujours invisible — 3 causes corrigées *)",
+      "Bash(git commit -m 'fix: push button toujours caché + logging des erreurs d'\\\\''envoi push *)",
+      "Bash(git commit -m 'fix: bouton push conditionné à la disponibilité des clés VAPID *)",
+      "Bash(git commit -m 'fix: push.js toujours chargé, pushToggle toujours défini *)",
+      "Bash(git -C \"/Users/cedricgeorgel/Documents/Moovie Soirée Ciné/V2\" add functions/series_logic.php config/cron_master.php)",
+      "Bash(git -C \"/Users/cedricgeorgel/Documents/Moovie Soirée Ciné/V2\" add functions/series_logic.php admin.php)",
+      "Bash(git commit *)",
+      "Bash(git -C \"/Users/cedricgeorgel/Documents/Moovie Soirée Ciné/V2\" pull --rebase)",
+      "Bash(git push *)",
+      "Bash(git -C \"/Users/cedricgeorgel/Documents/Moovie Soirée Ciné/V2\" stash)",
+      "Bash(git pull *)",
+      "Bash(git stash *)",
+      "Bash(git -C \"/Users/cedricgeorgel/Documents/Moovie Soirée Ciné/V2\" add functions/series_logic.php)",
+      "Bash(git -C \"/Users/cedricgeorgel/Documents/Moovie Soirée Ciné/V2\" add api/api_diagnose_episodes.php)",
+      "Bash(git -C \"/Users/cedricgeorgel/Documents/Moovie Soirée Ciné/V2\" commit -m \"chore: suppression scripts one-shot TEMP/\")"
     ]
   }
 }

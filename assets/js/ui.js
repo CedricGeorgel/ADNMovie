@@ -747,7 +747,7 @@ function appendMessage(msg, isMe) {
                 padding:8px 12px;
                 border-radius:${isMe ? '14px 14px 4px 14px' : '14px 14px 14px 4px'};
                 font-size:0.82rem; color:white; line-height:1.5; word-break:break-word;
-                position:relative;">
+                position:relative; display:inline-block; width:auto;">
                 ${replyBubble}
                 ${formattedText}
                 <button onclick="replyChatMessage(${msg.id}, '${safeUser}')"

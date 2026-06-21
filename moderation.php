@@ -421,17 +421,29 @@ db_execute(
                      style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:12px 0;min-height:0;">
                     <p style="color:var(--text-dim);font-size:0.75rem;text-align:center;margin:auto;">Chargement…</p>
                 </div>
-                <div style="flex-shrink:0;display:flex;gap:8px;padding-top:12px;border-top:1px solid var(--border);">
-                    <input id="staff-chat-input" type="text" maxlength="1000"
-                           placeholder="Message…"
-                           style="flex:1;padding:10px 14px;background:rgba(255,255,255,0.04);border:1px solid var(--border);
-                                  border-radius:8px;color:var(--text-main);font-size:0.82rem;outline:none;"
-                           onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();staffChatSend();}">
-                    <button onclick="staffChatSend()"
-                            style="padding:10px 18px;background:var(--pastel-blue);color:#050505;border:none;
-                                   border-radius:8px;font-weight:bold;font-size:0.75rem;cursor:pointer;flex-shrink:0;">
-                        Envoyer
-                    </button>
+                <div style="flex-shrink:0;padding-top:12px;border-top:1px solid var(--border);">
+                    <input type="hidden" id="staff-chat-reply-id" value="">
+                    <div id="staff-chat-reply-indicator"
+                         style="display:none;align-items:center;justify-content:space-between;
+                                padding:5px 10px;background:rgba(167,199,231,0.08);
+                                border:1px solid rgba(167,199,231,0.2);border-radius:8px 8px 0 0;
+                                font-size:0.7rem;color:var(--pastel-blue);margin-bottom:-1px;">
+                        <span id="staff-chat-reply-label" style="opacity:0.8;"></span>
+                        <button type="button" onclick="staffChatCancelReply()"
+                                style="background:none;border:none;color:var(--text-dim);font-size:0.9rem;cursor:pointer;line-height:1;">✕</button>
+                    </div>
+                    <div style="display:flex;gap:8px;">
+                        <input id="staff-chat-input" type="text" maxlength="1000"
+                               placeholder="Message…"
+                               style="flex:1;padding:10px 14px;background:rgba(255,255,255,0.04);border:1px solid var(--border);
+                                      border-radius:8px;color:var(--text-main);font-size:0.82rem;outline:none;"
+                               onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();staffChatSend();}">
+                        <button onclick="staffChatSend()"
+                                style="padding:10px 18px;background:var(--pastel-blue);color:#050505;border:none;
+                                       border-radius:8px;font-weight:bold;font-size:0.75rem;cursor:pointer;flex-shrink:0;">
+                            Envoyer
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
