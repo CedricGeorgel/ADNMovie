@@ -1,8 +1,8 @@
 <?php
 /**
  * API_ADMIN_ORACLE_LIKES.PHP
- * Backfill Oracle like_score sur tous les films à partir des votes TMDB.
- * Ne touche pas aux scores ADN existants.
+ * Backfill Oracle like_score en batches depuis les votes TMDB.
+ * Le JS chaîne les appels automatiquement — chaque requête traite LIMIT films.
  * Admin uniquement.
  */
 require_once __DIR__ . '/../functions/utils.php';
@@ -17,34 +17,43 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-set_time_limit(0);
-ini_set('max_execution_time', 0);
+set_time_limit(120);
+
+$offset = max(0, (int)($_POST['offset'] ?? 0));
+$limit  = min(50, max(1, (int)($_POST['limit'] ?? 50)));
 
 $pdo = getPDO();
 
-$movies = $pdo->query("SELECT tmdb_id FROM movies ORDER BY tmdb_id")->fetchAll(PDO::FETCH_ASSOC);
+$total  = (int)db_fetch_one("SELECT COUNT(*) AS cnt FROM movies")['cnt'];
 
-$total   = count($movies);
+$stmt = $pdo->prepare("SELECT tmdb_id FROM movies ORDER BY tmdb_id LIMIT ? OFFSET ?");
+$stmt->bindValue(1, $limit, PDO::PARAM_INT);
+$stmt->bindValue(2, $offset, PDO::PARAM_INT);
+$stmt->execute();
+$movies = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
 $updated = 0;
 $skipped = 0;
 $errors  = 0;
 
+_oracle_ensure_user($pdo);
+
 foreach ($movies as $row) {
     $tmdbId = (int)$row['tmdb_id'];
 
-    $url      = "https://api.themoviedb.org/3/movie/{$tmdbId}?api_key=" . TMDB_API_KEY . "&language=fr-FR";
+    $url      = "https://api.themoviedb.org/3/movie/{$tmdbId}?api_key=" . TMDB_API_KEY;
     $response = @file_get_contents($url);
 
     if (!$response) {
         $errors++;
-        usleep(200000);
+        usleep(100000);
         continue;
     }
 
     $data = json_decode($response, true);
     if (empty($data['id'])) {
         $errors++;
-        usleep(200000);
+        usleep(100000);
         continue;
     }
 
@@ -56,13 +65,11 @@ foreach ($movies as $row) {
 
     if ($likeScore === null) {
         $skipped++;
-        usleep(50000);
+        usleep(25000);
         continue;
     }
 
     try {
-        _oracle_ensure_user($pdo);
-
         $pdo->prepare(
             "INSERT INTO ratings (user_id, movie_id, scores, like_score, is_liked, rating_weight, rated_at)
              VALUES (?, ?, NULL, ?, ?, ?, NOW())
@@ -74,12 +81,16 @@ foreach ($movies as $row) {
         $errors++;
     }
 
-    usleep(100000);
+    usleep(50000); // 50ms entre appels TMDB
 }
+
+$newOffset = $offset + count($movies);
 
 echo json_encode([
     'success' => true,
     'total'   => $total,
+    'offset'  => $newOffset,
+    'done'    => $newOffset >= $total,
     'updated' => $updated,
     'skipped' => $skipped,
     'errors'  => $errors,

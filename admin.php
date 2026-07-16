@@ -478,32 +478,41 @@ $userActivity = array_column($activityRows, 'cnt', 'user_id');
     <script>
     async function runOracleSync(btn) {
         btn.disabled = true;
-        btn.textContent = 'Oracle en cours…';
         const log = document.getElementById('oracleSyncLog');
         log.style.display = 'block';
         log.style.color = 'var(--text-dim)';
 
+        let offset = 0, totalUpdated = 0, totalSkipped = 0, totalErrors = 0, grandTotal = 0;
         let secs = 0;
-        const timer = setInterval(() => {
-            secs++;
-            log.textContent = `Oracle en cours… ${secs}s`;
-        }, 1000);
+        const timer = setInterval(() => { secs++; }, 1000);
 
         try {
-            const res  = await fetch('api/api_admin_oracle_likes.php', { method: 'POST' });
-            clearInterval(timer);
-            const data = await res.json();
-            if (data.success) {
-                log.style.color = '#9dffb0';
-                log.innerHTML = `✓ ${data.updated} mis à jour &middot; ${data.skipped} ignorés (&lt; 5 votes) &middot; ${data.errors} erreurs &middot; ${data.total} films &middot; ${secs}s`;
-            } else {
-                log.style.color = '#f87171';
-                log.textContent = '✗ ' + (data.error || 'Erreur inconnue');
+            let done = false;
+            while (!done) {
+                btn.textContent = `Oracle en cours… ${offset}/${grandTotal || '?'} (${secs}s)`;
+                log.textContent = `Batch en cours : films ${offset + 1}–${offset + 50}… (${secs}s)`;
+
+                const body = new URLSearchParams({ offset, limit: 50 });
+                const res  = await fetch('api/api_admin_oracle_likes.php', { method: 'POST', body });
+
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || 'Erreur serveur');
+
+                totalUpdated += data.updated;
+                totalSkipped += data.skipped;
+                totalErrors  += data.errors;
+                grandTotal    = data.total;
+                offset        = data.offset;
+                done          = data.done;
             }
+            clearInterval(timer);
+            log.style.color = '#9dffb0';
+            log.innerHTML = `✓ ${totalUpdated} mis à jour &middot; ${totalSkipped} ignorés (&lt; 5 votes) &middot; ${totalErrors} erreurs &middot; ${grandTotal} films &middot; ${secs}s`;
         } catch (e) {
             clearInterval(timer);
             log.style.color = '#f87171';
-            log.textContent = '✗ Requête échouée';
+            log.textContent = `✗ ${e.message} (après ${offset} films traités)`;
         }
         btn.disabled = false;
         btn.textContent = '⚡ Relancer Oracle';

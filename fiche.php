@@ -200,11 +200,12 @@ if ($userId && isset($seriesLocalId)) {
 }
 
 // ── SEO ───────────────────────────────────────────────────────────────────────
-$ogRawDesc = match($contentType) {
+$ogRawDesc  = match($contentType) {
     'movie'  => $movie['synopsis']   ?? '',
     default  => $content['synopsis'] ?? '',
 };
-$ogDescBase = mb_substr(strip_tags($ogRawDesc), 0, 120);
+$ogRawClean = strip_tags($ogRawDesc);
+$ogDescBase = mb_substr($ogRawClean, 0, 120) . (mb_strlen($ogRawClean) > 120 ? '…' : '');
 
 if ($contentType === 'movie' && !empty($stats['averages'])) {
     $labels = ['Complexité','Prévisibilité','Intensité','Malaise','Stylisation','Dynamique','Dépaysement','Cohérence'];
@@ -213,15 +214,22 @@ if ($contentType === 'movie' && !empty($stats['averages'])) {
         $val = $stats['averages'][$i] ?? 0;
         if ($val != 0) $adnParts[] = $label . ' ' . ($val > 0 ? '+' : '') . round($val, 1);
     }
-    $adnStr = !empty($adnParts) ? ' | ADN : ' . implode(', ', $adnParts) : '';
-    $likeStr = $avgLikeScore !== null ? ' | Note : ' . ($avgLikeScore > 0 ? '+' : '') . $avgLikeScore . '/10 (' . $avgLikeCount . ' avis)' : '';
-    $ogDescBase .= $adnStr . $likeStr;
+    if (!empty($adnParts)) {
+        $ogDescBase .= "\nADN : " . implode("\n", $adnParts);
+    }
+    if ($avgLikeScore !== null) {
+        $ogDescBase .= "\nNote : " . ($avgLikeScore > 0 ? '+' : '') . $avgLikeScore . '/10';
+    }
 }
 
-$ogDescription = h(mb_substr($ogDescBase, 0, 300));
-$ogImage       = (str_starts_with($backdropImage, 'http'))
-    ? h($backdropImage)
-    : 'https://adnmovie.fr/assets/Icons/Named_logo1.png';
+$ogDescription = h(mb_substr($ogDescBase, 0, 500));
+if (str_starts_with($backdropImage, 'http')) {
+    $ogImage = h($backdropImage);
+} elseif (!empty($backdropImage) && $backdropImage !== 'assets/no-poster.svg') {
+    $ogImage = 'https://adnmovie.fr/' . ltrim($backdropImage, '/');
+} else {
+    $ogImage = 'https://adnmovie.fr/assets/Icons/Named_logo1.png';
+}
 $ogTitle       = h(strip_tags($pageTitle));
 $canonicalUrl  = 'https://adnmovie.fr/fiche.php?id=' . $tmdbId
     . ($type !== 'movie' ? '&type=' . $type : '')
