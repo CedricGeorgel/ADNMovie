@@ -26,10 +26,7 @@ $pdo = getPDO();
 
 $total  = (int)db_fetch_one("SELECT COUNT(*) AS cnt FROM movies")['cnt'];
 
-$stmt = $pdo->prepare("SELECT tmdb_id FROM movies ORDER BY tmdb_id LIMIT ? OFFSET ?");
-$stmt->bindValue(1, $limit, PDO::PARAM_INT);
-$stmt->bindValue(2, $offset, PDO::PARAM_INT);
-$stmt->execute();
+$stmt = $pdo->query("SELECT tmdb_id FROM movies ORDER BY tmdb_id LIMIT {$limit} OFFSET {$offset}");
 $movies = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $updated = 0;
