@@ -56,9 +56,23 @@ $discoverUrl = "https://api.themoviedb.org/3/discover/{$type}"
     . $regionParam
     . "&page={$page}";
 
-$res = @file_get_contents($discoverUrl);
-if (!$res) {
-    echo json_encode(['success' => false, 'error' => 'TMDB Discover injoignable', 'phase' => $phase, 'page' => $page]);
+// Retry × 3 avec backoff en cas d'erreur transitoire TMDB
+$res = false;
+for ($attempt = 0; $attempt < 3; $attempt++) {
+    if ($attempt > 0) sleep($attempt * 2); // 0s, 2s, 4s
+    $res = @file_get_contents($discoverUrl);
+    if ($res !== false) break;
+}
+if ($res === false) {
+    echo json_encode([
+        'success'     => false,
+        'retryable'   => true,
+        'error'       => 'TMDB Discover injoignable (3 tentatives)',
+        'phase'       => $phase,
+        'page'        => $page,
+        'next_phase'  => $phase,
+        'next_page'   => $page,
+    ]);
     exit;
 }
 

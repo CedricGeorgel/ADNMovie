@@ -571,19 +571,48 @@ $userActivity = array_column($activityRows, 'cnt', 'user_id');
 
         const phaseLabels = ['Classiques (−1980)', 'Années 80−90', 'Années 2000', 'Années 2010', '2020+'];
         let totalInserted = 0, totalSkipped = 0, totalErrors = 0;
-        let phase = 0, page = 1;
+        const storageKey = `tmdbImport_${type}`;
+        const saved = JSON.parse(localStorage.getItem(storageKey) || 'null');
+        let phase = saved ? saved.phase : 0;
+        let page  = saved ? saved.page  : 1;
         let secs = 0;
+        if (saved) {
+            phaseEl.textContent = `Reprise — Phase ${phase + 1}/5 · Page ${page}`;
+        }
         const timer = setInterval(() => { secs++; }, 1000);
 
         try {
-            let done = false;
+            let done = false, consecutiveErrors = 0;
             while (!done) {
                 const body = new URLSearchParams({ type, phase, page });
-                const res  = await fetch('api/api_admin_tmdb_import.php', { method: 'POST', body });
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const data = await res.json();
-                if (!data.success) throw new Error(data.error || 'Erreur serveur');
+                let data;
+                try {
+                    const res = await fetch('api/api_admin_tmdb_import.php', { method: 'POST', body });
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    data = await res.json();
+                } catch (fetchErr) {
+                    consecutiveErrors++;
+                    if (consecutiveErrors >= 3) throw fetchErr;
+                    logEl.style.color = '#fbbf24';
+                    logEl.textContent = `⚠ Erreur réseau, reprise dans 10s… (tentative ${consecutiveErrors}/3)`;
+                    await new Promise(r => setTimeout(r, 10000));
+                    continue;
+                }
 
+                if (!data.success) {
+                    if (data.retryable) {
+                        consecutiveErrors++;
+                        if (consecutiveErrors >= 3) throw new Error(data.error || 'Erreur serveur');
+                        logEl.style.color = '#fbbf24';
+                        logEl.textContent = `⚠ TMDB injoignable, reprise dans 15s… (tentative ${consecutiveErrors}/3)`;
+                        await new Promise(r => setTimeout(r, 15000));
+                        // phase/page inchangés — on réessaie la même page
+                        continue;
+                    }
+                    throw new Error(data.error || 'Erreur serveur');
+                }
+
+                consecutiveErrors = 0;
                 totalInserted += data.inserted;
                 totalSkipped  += data.skipped;
                 totalErrors   += data.errors;
@@ -594,14 +623,17 @@ $userActivity = array_column($activityRows, 'cnt', 'user_id');
                 countEl.textContent = totalInserted;
                 barEl.style.width   = pct.toFixed(1) + '%';
                 phaseEl.textContent = `Phase ${data.phase + 1}/5 — ${phaseLabels[data.phase] || ''} · Page ${data.page}/${totalPages}`;
+                logEl.style.color   = 'var(--text-dim)';
                 logEl.textContent   = `+${data.inserted} insérés · ${data.skipped} existants · ${data.errors} err — ${secs}s`;
 
                 if (!done) {
                     phase = data.next_phase;
                     page  = data.next_page;
+                    localStorage.setItem(storageKey, JSON.stringify({ phase, page }));
                 }
             }
             clearInterval(timer);
+            localStorage.removeItem(storageKey);
             barEl.style.width   = '100%';
             phaseEl.textContent = 'Terminé';
             logEl.style.color   = '#9dffb0';
