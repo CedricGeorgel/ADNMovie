@@ -188,6 +188,18 @@ $userActivity = array_column($activityRows, 'cnt', 'user_id');
                         </div>
                     </div>
 
+                    <div class="widget">
+                        <div class="widget-title">Oracle — Sync appréciations TMDB</div>
+                        <p style="font-size:0.75rem;color:var(--text-dim);margin-bottom:14px;">
+                            Recalcule le <code style="font-size:0.7rem;">like_score</code> Oracle sur tous les films depuis les votes TMDB (50&nbsp;%&nbsp;=&nbsp;0 chez nous).<br>
+                            Ne touche <strong>pas</strong> aux scores ADN existants.
+                        </p>
+                        <div id="oracleSyncLog" style="display:none;font-size:0.72rem;font-family:monospace;padding:8px 10px;background:var(--card-bg);border:1px solid var(--border);border-radius:6px;margin-bottom:12px;"></div>
+                        <button id="btnOracleSync" class="btn-base active" style="width:100%;" onclick="runOracleSync(this)">
+                            ⚡ Lancer Oracle (toute la base)
+                        </button>
+                    </div>
+
                 </div>
             </div>
 
@@ -464,6 +476,31 @@ $userActivity = array_column($activityRows, 'cnt', 'user_id');
     <script src="assets/js/ui.js" defer></script>
     <script src="assets/js/admin.js?v=<?= filemtime('assets/js/admin.js') ?>"></script>
     <script>
+    async function runOracleSync(btn) {
+        btn.disabled = true;
+        btn.textContent = 'Oracle en cours… (peut prendre plusieurs minutes)';
+        const log = document.getElementById('oracleSyncLog');
+        log.style.display = 'block';
+        log.style.color = 'var(--text-dim)';
+        log.textContent = 'Connexion à l\'API…';
+        try {
+            const res  = await fetch('api/api_admin_oracle_likes.php', { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+                log.style.color = '#9dffb0';
+                log.innerHTML = `✓ ${data.updated} mis à jour &middot; ${data.skipped} ignorés (< 5 votes) &middot; ${data.errors} erreurs &middot; ${data.total} films traités`;
+            } else {
+                log.style.color = '#f87171';
+                log.textContent = '✗ ' + (data.error || 'Erreur inconnue');
+            }
+        } catch (e) {
+            log.style.color = '#f87171';
+            log.textContent = '✗ Requête échouée';
+        }
+        btn.disabled = false;
+        btn.textContent = '⚡ Relancer Oracle';
+    }
+
     async function pushBroadcast() {
         const title = document.getElementById('pb-title').value.trim();
         const body  = document.getElementById('pb-body').value.trim();
