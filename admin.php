@@ -478,22 +478,30 @@ $userActivity = array_column($activityRows, 'cnt', 'user_id');
     <script>
     async function runOracleSync(btn) {
         btn.disabled = true;
-        btn.textContent = 'Oracle en cours… (peut prendre plusieurs minutes)';
+        btn.textContent = 'Oracle en cours…';
         const log = document.getElementById('oracleSyncLog');
         log.style.display = 'block';
         log.style.color = 'var(--text-dim)';
-        log.textContent = 'Connexion à l\'API…';
+
+        let secs = 0;
+        const timer = setInterval(() => {
+            secs++;
+            log.textContent = `Oracle en cours… ${secs}s`;
+        }, 1000);
+
         try {
             const res  = await fetch('api/api_admin_oracle_likes.php', { method: 'POST' });
+            clearInterval(timer);
             const data = await res.json();
             if (data.success) {
                 log.style.color = '#9dffb0';
-                log.innerHTML = `✓ ${data.updated} mis à jour &middot; ${data.skipped} ignorés (< 5 votes) &middot; ${data.errors} erreurs &middot; ${data.total} films traités`;
+                log.innerHTML = `✓ ${data.updated} mis à jour &middot; ${data.skipped} ignorés (&lt; 5 votes) &middot; ${data.errors} erreurs &middot; ${data.total} films &middot; ${secs}s`;
             } else {
                 log.style.color = '#f87171';
                 log.textContent = '✗ ' + (data.error || 'Erreur inconnue');
             }
         } catch (e) {
+            clearInterval(timer);
             log.style.color = '#f87171';
             log.textContent = '✗ Requête échouée';
         }
