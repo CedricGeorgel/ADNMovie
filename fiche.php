@@ -61,15 +61,17 @@ if ($contentType === 'movie') {
     $voteCount = (int)$stats['count'];
 
     $avgLikeRow = db_fetch_one(
-        "SELECT AVG(like_score) AS avg_like, COUNT(*) AS cnt
+        "SELECT
+             SUM(like_score * rating_weight) / SUM(rating_weight) AS avg_like,
+             SUM(CASE WHEN user_id != 'IA-ORACLE-001' THEN 1 ELSE 0 END) AS human_cnt
          FROM ratings
-         WHERE movie_id = ? AND like_score IS NOT NULL AND user_id != 'IA-ORACLE-001'",
+         WHERE movie_id = ? AND like_score IS NOT NULL",
         [$movieId]
     );
-    $avgLikeScore = ($avgLikeRow && $avgLikeRow['cnt'] > 0)
+    $avgLikeScore = ($avgLikeRow && $avgLikeRow['avg_like'] !== null)
         ? round((float)$avgLikeRow['avg_like'], 1)
         : null;
-    $avgLikeCount = (int)($avgLikeRow['cnt'] ?? 0);
+    $avgLikeCount = (int)($avgLikeRow['human_cnt'] ?? 0);
 
     $isLiked           = false;
     $isWishlisted      = false;
