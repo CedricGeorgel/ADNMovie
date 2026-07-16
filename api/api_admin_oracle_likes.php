@@ -6,23 +6,19 @@
  * Admin uniquement.
  */
 require_once __DIR__ . '/../functions/utils.php';
-require_once __DIR__ . '/../config/settings.php';
-require_once __DIR__ . '/../functions/core_db.php';
-require_once __DIR__ . '/../api/api_oracle.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
-start_persistent_session();
 require_role('admin');
-
-set_time_limit(0);
-ini_set('max_execution_time', 0);
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
     echo json_encode(['success' => false, 'error' => 'POST uniquement']);
     exit;
 }
+
+set_time_limit(0);
+ini_set('max_execution_time', 0);
 
 $pdo = getPDO();
 
@@ -78,7 +74,7 @@ foreach ($movies as $row) {
         $errors++;
     }
 
-    usleep(100000); // 100ms entre appels TMDB
+    usleep(100000);
 }
 
 echo json_encode([
