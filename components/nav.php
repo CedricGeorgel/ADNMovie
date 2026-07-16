@@ -12,13 +12,13 @@ function renderNav($activePage = 'home') {
     ];
 
     if ($isLoggedIn) {
-        $menu['communaute']      = ['label' => 'Communauté',     'url' => 'communaute.php'];
+        //$menu['communaute']      = ['label' => 'Communauté',     'url' => 'communaute.php'];
         $menu['rooms']           = ['label' => 'Sessions',       'url' => 'rooms.php'];
         $menu['recommendations'] = ['label' => 'Séquençage ADN', 'url' => 'recommendations.php'];
         $menu['mood']            = ['label' => 'Ce soir...',     'url' => 'mood.php'];
     }
 
-    $menu['Archives'] = ['label' => 'Archives', 'url' => 'archives.php'];
+    $menu['Archives'] = ['label' => 'Archives', 'url' => 'archives.php'];Ò
     ?>
     <nav class="main-nav" style="position: relative;">
         <div class="nav-container">
