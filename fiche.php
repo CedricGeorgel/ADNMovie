@@ -292,7 +292,6 @@ $canonicalUrl  = 'https://adnmovie.fr/fiche.php?id=' . $tmdbId
                             <div style="font-size:1.4rem;font-weight:900;color:<?= $avgLikeScore >= 0 ? 'var(--pastel-blue)' : '#f87171' ?>;">
                                 <?= $avgLikeScore > 0 ? '+' : '' ?><?= $avgLikeScore ?>
                             </div>
-                            <div style="font-size:0.62rem;color:var(--text-dim);margin-top:2px;"><?= $avgLikeCount ?> avis</div>
                         </div>
                     <?php endif; ?>
                     <?php if ($currentUser): ?>

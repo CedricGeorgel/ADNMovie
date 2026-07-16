@@ -20,12 +20,6 @@ function renderRadarChart($data_commu, $data_user = null, $polarization = 0, $id
     <div class="radar-wrapper" style="position: relative; z-index: 1;">
 
         <div class="radar-badges">
-            <?php if ((int)$voteCount > 0): ?>
-            <span class="radar-badge radar-badge--votes">
-                <?= (int)$voteCount ?> analyse<?= (int)$voteCount > 1 ? 's' : '' ?>
-            </span>
-            <?php endif; ?>
-
             <?php if ($has_data && $showBadge && (int)$voteCount >= 10): ?>
                 <span class="radar-badge radar-badge--polar <?= $polarization > 1.5 ? 'radar-badge--polar-high' : '' ?>">
                     <?= $polarization > 1.5 ? '⚡ Polarisant' : '🤝 Consensus' ?>
