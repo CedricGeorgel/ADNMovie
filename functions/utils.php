@@ -196,49 +196,144 @@ function upsert_series_metadata(int $tmdbId, array $tmdbData): void
  * Recherche hybride : BDD en premier (films + séries), TMDB en complément.
  */
 function search_movies_hybrid(string $q, int $minLocal = 3): array {
-    // Films locaux
-    $localMovies = db_fetch_all(
-        'SELECT tmdb_id AS id, title, poster, year FROM movies
-         WHERE title LIKE ?
-         ORDER BY total_votes DESC
-         LIMIT 10',
-        ['%' . $q . '%']
-    );
-    foreach ($localMovies as &$m) {
-        $m['source']       = 'local';
-        $m['content_type'] = 'movie';
+    $q = trim($q);
+    if ($q === '') return [];
+
+    // Mode structuré si la requête contient au moins un préfixe a:, r:, c:
+    if (preg_match('/\b[arc]:/i', $q)) {
+        return _search_structured($q);
     }
+    return _search_natural($q, $minLocal);
+}
+
+/**
+ * Recherche structurée avec préfixes :
+ *   a:2016        → année
+ *   r:Ducournau   → réalisateur
+ *   c:Brad Pitt   → acteur (cast)
+ * Le texte sans préfixe = titre.
+ */
+function _search_structured(string $q): array {
+    $year = null; $director = null; $cast = null;
+
+    // Extraire chaque préfixe et sa valeur (jusqu'au préfixe suivant ou fin de chaîne)
+    preg_match_all('/\b(a|r|c):(.+?)(?=\s+(?:a|r|c):|$)/i', $q, $matches, PREG_SET_ORDER);
+    foreach ($matches as $m) {
+        $val = trim($m[2]);
+        $q   = str_replace($m[0], '', $q);
+        switch (strtolower($m[1])) {
+            case 'a': $year     = (int)$val; break;
+            case 'r': $director = $val;       break;
+            case 'c': $cast     = $val;       break;
+        }
+    }
+    $title = trim($q);
+
+    // ── Films ────────────────────────────────────────────────────────────────
+    $where = []; $params = [];
+    if ($title !== '')   { $where[] = 'LOWER(title) LIKE ?';       $params[] = '%' . mb_strtolower($title) . '%'; }
+    if ($year)           { $where[] = 'year = ?';                   $params[] = $year; }
+    if ($director)       { $where[] = 'LOWER(director) LIKE ?';     $params[] = '%' . mb_strtolower($director) . '%'; }
+    if ($cast)           { $where[] = 'LOWER(cast_data) LIKE ?';    $params[] = '%' . mb_strtolower($cast) . '%'; }
+    if (empty($where)) return [];
+
+    $movies = db_fetch_all(
+        "SELECT tmdb_id AS id, title, poster, year, director
+         FROM movies WHERE " . implode(' AND ', $where) . " ORDER BY total_votes DESC LIMIT 10",
+        $params
+    ) ?: [];
+    foreach ($movies as &$m) { $m['source'] = 'local'; $m['content_type'] = 'movie'; }
     unset($m);
 
-    // Séries locales
-    $localSeries = db_fetch_all(
-        'SELECT tmdb_id AS id, title, poster, year FROM series
-         WHERE title LIKE ?
-         ORDER BY total_votes DESC
-         LIMIT 5',
-        ['%' . $q . '%']
-    );
-    foreach ($localSeries as &$s) {
-        $s['source']       = 'local';
-        $s['content_type'] = 'tv';
+    // ── Séries (titre + année seulement, pas de cast/director en BDD) ────────
+    $sWhere = []; $sParams = [];
+    if ($title !== '') { $sWhere[] = 'LOWER(title) LIKE ?'; $sParams[] = '%' . mb_strtolower($title) . '%'; }
+    if ($year)         { $sWhere[] = 'year = ?';            $sParams[] = $year; }
+    $series = [];
+    if (!empty($sWhere) && !$director && !$cast) {
+        $series = db_fetch_all(
+            "SELECT tmdb_id AS id, title, poster, year
+             FROM series WHERE " . implode(' AND ', $sWhere) . " ORDER BY total_votes DESC LIMIT 5",
+            $sParams
+        ) ?: [];
+        foreach ($series as &$s) { $s['source'] = 'local'; $s['content_type'] = 'tv'; }
+        unset($s);
     }
+
+    return array_merge($movies, $series);
+}
+
+/**
+ * Recherche en langage naturel : tokens scorés (titre=3, réal=2, casting=1).
+ * Stop-words ignorés. Tous les tokens doivent matcher quelque part.
+ * Année extraite automatiquement (ex: "Grave 2016").
+ */
+function _search_natural(string $q, int $minLocal): array {
+    static $stopWords = ['le','la','les','de','du','des','et','en','un','une','au','aux',
+                         'the','a','an','of','in','to','and','for','l','d'];
+
+    // Extraire l'année
+    $year = null;
+    $q = preg_replace_callback('/\b((?:19|20)\d{2})\b/', function($m) use (&$year) {
+        $year = (int)$m[1]; return '';
+    }, $q);
+
+    // Tokens : minuscules, ≥ 2 chars, pas des stop-words
+    $raw    = array_filter(preg_split('/\s+/', mb_strtolower(trim($q))), fn($t) => mb_strlen($t) >= 2);
+    $tokens = array_values(array_filter($raw, fn($t) => !in_array($t, $stopWords)));
+    if (empty($tokens)) $tokens = array_values($raw); // fallback si tout était stop-words
+    if (empty($tokens) && !$year) return [];
+
+    // ── Films : WHERE = tous les tokens matchent quelque part ────────────────
+    $whereP = []; $whereV = [];
+    foreach ($tokens as $t) {
+        $like = '%' . $t . '%';
+        $whereP[] = "(LOWER(title) LIKE ? OR LOWER(director) LIKE ? OR LOWER(cast_data) LIKE ? OR LOWER(genres) LIKE ?)";
+        array_push($whereV, $like, $like, $like, $like);
+    }
+    if ($year) { $whereP[] = 'year = ?'; $whereV[] = $year; }
+
+    // SCORE
+    $scoreExpr = '0'; $scoreV = [];
+    foreach ($tokens as $t) {
+        $like = '%' . $t . '%';
+        $scoreExpr .= " + (CASE WHEN LOWER(title) LIKE ? THEN 3 ELSE 0 END)
+                       + (CASE WHEN LOWER(director) LIKE ? THEN 2 ELSE 0 END)
+                       + (CASE WHEN LOWER(cast_data) LIKE ? THEN 1 ELSE 0 END)";
+        array_push($scoreV, $like, $like, $like);
+    }
+
+    $movies = db_fetch_all(
+        "SELECT tmdb_id AS id, title, poster, year, director, ({$scoreExpr}) AS _score
+         FROM movies WHERE " . implode(' AND ', $whereP) . "
+         ORDER BY _score DESC, total_votes DESC LIMIT 10",
+        array_merge($scoreV, $whereV)
+    ) ?: [];
+    foreach ($movies as &$m) { unset($m['_score']); $m['source'] = 'local'; $m['content_type'] = 'movie'; }
+    unset($m);
+
+    // ── Séries : title only (pas de cast/director en BDD) ───────────────────
+    $sP = []; $sV = [];
+    foreach ($tokens as $t) { $sP[] = 'LOWER(title) LIKE ?'; $sV[] = '%' . $t . '%'; }
+    if ($year) { $sP[] = 'year = ?'; $sV[] = $year; }
+    $series = db_fetch_all(
+        "SELECT tmdb_id AS id, title, poster, year FROM series
+         WHERE " . implode(' AND ', $sP) . " ORDER BY total_votes DESC LIMIT 5",
+        $sV
+    ) ?: [];
+    foreach ($series as &$s) { $s['source'] = 'local'; $s['content_type'] = 'tv'; }
     unset($s);
 
-    $local    = array_merge($localMovies, $localSeries);
+    $local    = array_merge($movies, $series);
     $localIds = array_column($local, 'id');
 
+    // TMDB fallback si résultats locaux insuffisants
     if (count($local) < $minLocal) {
-        $tmdbResults = search_tmdb_multi($q);
-        foreach ($tmdbResults as $t) {
+        $tmdbQ = trim($q) . ($year ? " {$year}" : '');
+        foreach (search_tmdb_multi($tmdbQ) as $t) {
             if (in_array($t['id'], $localIds)) continue;
-            $local[] = [
-                'id'           => $t['id'],
-                'title'        => $t['title']        ?? null,
-                'poster'       => $t['poster']        ?? null,
-                'year'         => $t['year']          ?? null,
-                'source'       => 'tmdb',
-                'content_type' => $t['content_type']  ?? 'movie',
-            ];
+            $local[] = ['id' => $t['id'], 'title' => $t['title'] ?? null, 'poster' => $t['poster'] ?? null,
+                        'year' => $t['year'] ?? null, 'source' => 'tmdb', 'content_type' => $t['content_type'] ?? 'movie'];
         }
     }
 

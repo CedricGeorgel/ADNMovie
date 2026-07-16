@@ -305,16 +305,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (results && results.length > 0) {
                     resultsOverlay.innerHTML = results.map(m => {
                         // Compatibilité avec différentes structures retournées par search_movies_hybrid()
-                        const id     = m.tmdb_id || m.id || '';
-                        const title  = m.title || m.name || 'Titre inconnu';
-                        const poster = m.poster || m.poster_path || m.image || 'assets/no-poster.svg';
-                        const year   = m.year || m.release_year || (m.release_date ? m.release_date.substring(0,4) : '');
+                        const id       = m.tmdb_id || m.id || '';
+                        const title    = m.title || m.name || 'Titre inconnu';
+                        const poster   = m.poster || m.poster_path || m.image || 'assets/no-poster.svg';
+                        const year     = m.year || m.release_year || (m.release_date ? m.release_date.substring(0,4) : '');
+                        const director = m.director ? ` · ${m.director}` : '';
                         return `
                         <div class="search-result-item" data-id="${id}" style="display:flex; align-items:center; gap:12px; padding:10px; cursor:pointer; border-bottom:1px solid rgba(255,255,255,0.05);">
                             <img src="${poster}" onerror="this.src='assets/no-poster.svg'" style="width:35px; height:50px; object-fit:cover; border-radius:4px;">
                             <div class="res-info">
                                 <div style="font-weight:800; font-size:0.8rem; color:white;">${title}</div>
-                                <div style="font-size:0.65rem; color:var(--text-dim);">${year}</div>
+                                <div style="font-size:0.65rem; color:var(--text-dim);">${year}${director}</div>
                             </div>
                         </div>`;
                     }).join('');
