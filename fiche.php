@@ -60,6 +60,17 @@ if ($contentType === 'movie') {
     $stats     = get_movie_stats($movieId);
     $voteCount = (int)$stats['count'];
 
+    $avgLikeRow = db_fetch_one(
+        "SELECT AVG(like_score) AS avg_like, COUNT(*) AS cnt
+         FROM ratings
+         WHERE movie_id = ? AND like_score IS NOT NULL AND user_id != 'IA-ORACLE-001'",
+        [$movieId]
+    );
+    $avgLikeScore = ($avgLikeRow && $avgLikeRow['cnt'] > 0)
+        ? round((float)$avgLikeRow['avg_like'], 1)
+        : null;
+    $avgLikeCount = (int)($avgLikeRow['cnt'] ?? 0);
+
     $isLiked           = false;
     $isWishlisted      = false;
     $existingLikeScore = null;
@@ -193,7 +204,21 @@ $ogRawDesc = match($contentType) {
     'movie'  => $movie['synopsis']   ?? '',
     default  => $content['synopsis'] ?? '',
 };
-$ogDescription = h(mb_substr(strip_tags($ogRawDesc), 0, 155));
+$ogDescBase = mb_substr(strip_tags($ogRawDesc), 0, 120);
+
+if ($contentType === 'movie' && !empty($stats['averages'])) {
+    $labels = ['Complexité','Prévisibilité','Intensité','Malaise','Stylisation','Dynamique','Dépaysement','Cohérence'];
+    $adnParts = [];
+    foreach ($labels as $i => $label) {
+        $val = $stats['averages'][$i] ?? 0;
+        if ($val != 0) $adnParts[] = $label . ' ' . ($val > 0 ? '+' : '') . round($val, 1);
+    }
+    $adnStr = !empty($adnParts) ? ' | ADN : ' . implode(', ', $adnParts) : '';
+    $likeStr = $avgLikeScore !== null ? ' | Note : ' . ($avgLikeScore > 0 ? '+' : '') . $avgLikeScore . '/10 (' . $avgLikeCount . ' avis)' : '';
+    $ogDescBase .= $adnStr . $likeStr;
+}
+
+$ogDescription = h(mb_substr($ogDescBase, 0, 300));
 $ogImage       = (str_starts_with($backdropImage, 'http'))
     ? h($backdropImage)
     : 'https://adnmovie.fr/assets/Icons/Named_logo1.png';
@@ -261,6 +286,15 @@ $canonicalUrl  = 'https://adnmovie.fr/fiche.php?id=' . $tmdbId
                         true,
                         $voteCount
                     ); ?>
+                    <?php if ($avgLikeScore !== null): ?>
+                        <div style="margin-top:14px;text-align:center;padding:10px;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:10px;">
+                            <div style="font-size:0.6rem;font-weight:800;letter-spacing:1.5px;color:var(--text-dim);text-transform:uppercase;margin-bottom:4px;">Appréciation</div>
+                            <div style="font-size:1.4rem;font-weight:900;color:<?= $avgLikeScore >= 0 ? 'var(--pastel-blue)' : '#f87171' ?>;">
+                                <?= $avgLikeScore > 0 ? '+' : '' ?><?= $avgLikeScore ?>
+                            </div>
+                            <div style="font-size:0.62rem;color:var(--text-dim);margin-top:2px;"><?= $avgLikeCount ?> avis</div>
+                        </div>
+                    <?php endif; ?>
                     <?php if ($currentUser): ?>
                         <div style="margin-top:15px; display:flex; flex-direction:column; gap:8px;">
                             <button class="btn-base active" onclick="openRateModal()" style="width:100%;">

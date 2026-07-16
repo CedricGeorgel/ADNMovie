@@ -125,7 +125,12 @@ function get_movie_smart(int $tmdbId): ?array {
             fn($g) => is_array($g) ? ($g['name'] ?? '') : $g,
             $tmdb['genres'] ?? []
         );
-        apply_oracle_judgment($tmdbId, array_filter($genreNames));
+        apply_oracle_judgment(
+            $tmdbId,
+            array_filter($genreNames),
+            isset($tmdb['vote_average']) ? (float)$tmdb['vote_average'] : null,
+            (int)($tmdb['vote_count'] ?? 0)
+        );
     }
 
     return array_merge($tmdb, ['id' => $tmdbId, 'tmdb_id' => $tmdbId]);

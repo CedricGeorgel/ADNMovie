@@ -43,17 +43,19 @@ function fetch_tmdb_movie(int $tmdbId): ?array {
     }
 
     return [
-        'id'       => $data['id'],
-        'title'    => $data['title'],
-        'year'     => !empty($data['release_date']) ? (int)substr($data['release_date'], 0, 4) : null,
-        'director' => $director,
-        'runtime'  => $data['runtime'] ?? 0,
-        'poster'   => $data['poster_path']
-                        ? "https://image.tmdb.org/t/p/w500" . $data['poster_path']
-                        : 'assets/no-poster.svg',
-        'synopsis' => $data['overview'] ?? 'Aucun résumé disponible.',
-        'genres'   => array_column($data['genres'] ?? [], 'name'),
-        'cast'     => $cast,
+        'id'           => $data['id'],
+        'title'        => $data['title'],
+        'year'         => !empty($data['release_date']) ? (int)substr($data['release_date'], 0, 4) : null,
+        'director'     => $director,
+        'runtime'      => $data['runtime'] ?? 0,
+        'poster'       => $data['poster_path']
+                            ? "https://image.tmdb.org/t/p/w500" . $data['poster_path']
+                            : 'assets/no-poster.svg',
+        'synopsis'     => $data['overview'] ?? 'Aucun résumé disponible.',
+        'genres'       => array_column($data['genres'] ?? [], 'name'),
+        'cast'         => $cast,
+        'vote_average' => isset($data['vote_average']) ? (float)$data['vote_average'] : null,
+        'vote_count'   => isset($data['vote_count'])   ? (int)$data['vote_count']     : 0,
     ];
 }
 

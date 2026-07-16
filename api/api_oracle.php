@@ -235,17 +235,19 @@ function oracle_compute_scores(array $keywords, array $genres): array {
 
 // ── Fonctions publiques ───────────────────────────────────────────────────────
 
-function apply_oracle_judgment(int $tmdbId, array $genres): bool {
+function apply_oracle_judgment(int $tmdbId, array $genres, ?float $voteAvg = null, int $voteCount = 0): bool {
     $pdo = getPDO();
     try {
         _oracle_ensure_user($pdo);
 
-        $keywords = oracle_fetch_keywords($tmdbId, 'movie');
-        $scores   = oracle_compute_scores($keywords, $genres);
+        $keywords  = oracle_fetch_keywords($tmdbId, 'movie');
+        $scores    = oracle_compute_scores($keywords, $genres);
+        $likeScore = _oracle_vote_to_like_score($voteAvg, $voteCount);
+        $isLiked   = $likeScore !== null ? ($likeScore > 0 ? 1 : 0) : null;
 
-        $pdo->prepare("INSERT IGNORE INTO ratings (user_id, movie_id, scores, rating_weight, rated_at)
-                       VALUES (?, ?, ?, ?, NOW())")
-            ->execute([ORACLE_USER_ID, $tmdbId, json_encode($scores), ORACLE_WEIGHT]);
+        $pdo->prepare("INSERT IGNORE INTO ratings (user_id, movie_id, scores, like_score, is_liked, rating_weight, rated_at)
+                       VALUES (?, ?, ?, ?, ?, ?, NOW())")
+            ->execute([ORACLE_USER_ID, $tmdbId, json_encode($scores), $likeScore, $isLiked, ORACLE_WEIGHT]);
 
         foreach ($scores as $criterio => $val) {
             $pdo->prepare("INSERT INTO movie_dna (movie_id, criterio, avg_score, variance, sample_size)
