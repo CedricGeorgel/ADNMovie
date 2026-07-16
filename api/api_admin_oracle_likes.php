@@ -22,7 +22,7 @@ ini_set('max_execution_time', 0);
 
 $pdo = getPDO();
 
-$movies = $pdo->query("SELECT id AS tmdb_id FROM movies ORDER BY id")->fetchAll(PDO::FETCH_ASSOC);
+$movies = $pdo->query("SELECT tmdb_id FROM movies ORDER BY tmdb_id")->fetchAll(PDO::FETCH_ASSOC);
 
 $total   = count($movies);
 $updated = 0;
