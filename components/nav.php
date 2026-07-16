@@ -18,7 +18,7 @@ function renderNav($activePage = 'home') {
         $menu['mood']            = ['label' => 'Ce soir...',     'url' => 'mood.php'];
     }
 
-    $menu['Archives'] = ['label' => 'Archives', 'url' => 'archives.php'];Ò
+    $menu['Archives'] = ['label' => 'Archives', 'url' => 'archives.php'];
     ?>
     <nav class="main-nav" style="position: relative;">
         <div class="nav-container">
