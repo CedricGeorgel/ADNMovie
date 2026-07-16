@@ -240,14 +240,31 @@ function apply_oracle_judgment(int $tmdbId, array $genres, ?float $voteAvg = nul
     try {
         _oracle_ensure_user($pdo);
 
+        // Si vote_avg non fourni ou insuffisant, on le récupère directement depuis TMDB
+        if ($voteAvg === null || $voteAvg <= 0 || $voteCount < 5) {
+            $apiKey  = defined('TMDB_API_KEY') ? TMDB_API_KEY : '';
+            $res     = @file_get_contents("https://api.themoviedb.org/3/movie/{$tmdbId}?api_key={$apiKey}");
+            if ($res) {
+                $d         = json_decode($res, true);
+                $voteAvg   = isset($d['vote_average']) ? (float)$d['vote_average'] : $voteAvg;
+                $voteCount = isset($d['vote_count'])   ? (int)$d['vote_count']     : $voteCount;
+            }
+        }
+
         $keywords  = oracle_fetch_keywords($tmdbId, 'movie');
         $scores    = oracle_compute_scores($keywords, $genres);
         $likeScore = _oracle_vote_to_like_score($voteAvg, $voteCount);
         $isLiked   = $likeScore !== null ? ($likeScore > 0 ? 1 : 0) : null;
 
-        $pdo->prepare("INSERT IGNORE INTO ratings (user_id, movie_id, scores, like_score, is_liked, rating_weight, rated_at)
-                       VALUES (?, ?, ?, ?, ?, ?, NOW())")
-            ->execute([ORACLE_USER_ID, $tmdbId, json_encode($scores), $likeScore, $isLiked, ORACLE_WEIGHT]);
+        // ON DUPLICATE KEY UPDATE pour corriger les rows Oracle déjà existantes sans like_score
+        $pdo->prepare(
+            "INSERT INTO ratings (user_id, movie_id, scores, like_score, is_liked, rating_weight, rated_at)
+             VALUES (?, ?, ?, ?, ?, ?, NOW())
+             ON DUPLICATE KEY UPDATE
+                 scores     = COALESCE(scores, VALUES(scores)),
+                 like_score = IF(like_score IS NULL AND VALUES(like_score) IS NOT NULL, VALUES(like_score), like_score),
+                 is_liked   = IF(is_liked   IS NULL AND VALUES(is_liked)   IS NOT NULL, VALUES(is_liked),   is_liked)"
+        )->execute([ORACLE_USER_ID, $tmdbId, json_encode($scores), $likeScore, $isLiked, ORACLE_WEIGHT]);
 
         foreach ($scores as $criterio => $val) {
             $pdo->prepare("INSERT INTO movie_dna (movie_id, criterio, avg_score, variance, sample_size)
