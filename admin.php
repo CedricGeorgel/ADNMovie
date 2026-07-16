@@ -189,6 +189,44 @@ $userActivity = array_column($activityRows, 'cnt', 'user_id');
                     </div>
 
                     <div class="widget">
+                        <div class="widget-title">Import catalogue TMDB</div>
+                        <p style="font-size:0.75rem;color:var(--text-dim);margin-bottom:14px;">
+                            Import complet (synopsis, casting, poster, Oracle ADN + note) — identique à une visite organique.<br>
+                            Films filtrés sur les sorties France · Séries filtrées par vote_count.
+                        </p>
+
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+                            <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:10px;">
+                                <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim);font-weight:800;margin-bottom:6px;">Films</div>
+                                <div id="importMovieCount" style="font-size:1.4rem;font-weight:900;color:var(--pastel-blue);">—</div>
+                                <div id="importMoviePhase" style="font-size:0.65rem;color:var(--text-dim);margin-top:2px;">En attente</div>
+                                <div style="margin-top:8px;height:4px;background:rgba(255,255,255,0.08);border-radius:2px;overflow:hidden;">
+                                    <div id="importMovieBar" style="height:100%;width:0%;background:var(--pastel-blue);transition:width 0.3s;border-radius:2px;"></div>
+                                </div>
+                            </div>
+                            <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:10px;">
+                                <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim);font-weight:800;margin-bottom:6px;">Séries</div>
+                                <div id="importSerieCount" style="font-size:1.4rem;font-weight:900;color:#c4b5fd;">—</div>
+                                <div id="importSeriePhase" style="font-size:0.65rem;color:var(--text-dim);margin-top:2px;">En attente</div>
+                                <div style="margin-top:8px;height:4px;background:rgba(255,255,255,0.08);border-radius:2px;overflow:hidden;">
+                                    <div id="importSerieBar" style="height:100%;width:0%;background:#c4b5fd;transition:width 0.3s;border-radius:2px;"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="importLog" style="display:none;font-size:0.7rem;font-family:monospace;padding:8px 10px;background:var(--card-bg);border:1px solid var(--border);border-radius:6px;margin-bottom:12px;max-height:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
+
+                        <div style="display:flex;gap:8px;">
+                            <button id="btnImportMovies" class="btn-base active" style="flex:1;" onclick="runTmdbImport('movie', this)">
+                                🎬 Importer Films
+                            </button>
+                            <button id="btnImportSeries" class="btn-base" style="flex:1;background:rgba(196,181,253,0.15);border-color:rgba(196,181,253,0.3);color:#c4b5fd;" onclick="runTmdbImport('tv', this)">
+                                📺 Importer Séries
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="widget">
                         <div class="widget-title">Oracle — Sync appréciations TMDB</div>
                         <p style="font-size:0.75rem;color:var(--text-dim);margin-bottom:14px;">
                             Recalcule le <code style="font-size:0.7rem;">like_score</code> Oracle sur tous les films depuis les votes TMDB (50&nbsp;%&nbsp;=&nbsp;0 chez nous).<br>
@@ -516,6 +554,67 @@ $userActivity = array_column($activityRows, 'cnt', 'user_id');
         }
         btn.disabled = false;
         btn.textContent = '⚡ Relancer Oracle';
+    }
+
+    async function runTmdbImport(type, btn) {
+        btn.disabled = true;
+        const otherBtn = document.getElementById(type === 'movie' ? 'btnImportSeries' : 'btnImportMovies');
+        if (otherBtn) otherBtn.disabled = true;
+
+        const countEl = document.getElementById(type === 'movie' ? 'importMovieCount' : 'importSerieCount');
+        const phaseEl = document.getElementById(type === 'movie' ? 'importMoviePhase' : 'importSeriePhase');
+        const barEl   = document.getElementById(type === 'movie' ? 'importMovieBar'  : 'importSerieBar');
+        const logEl   = document.getElementById('importLog');
+
+        logEl.style.display = 'block';
+        logEl.style.color   = 'var(--text-dim)';
+
+        const phaseLabels = ['Classiques (−1980)', 'Années 80−90', 'Années 2000', 'Années 2010', '2020+'];
+        let totalInserted = 0, totalSkipped = 0, totalErrors = 0;
+        let phase = 0, page = 1;
+        let secs = 0;
+        const timer = setInterval(() => { secs++; }, 1000);
+
+        try {
+            let done = false;
+            while (!done) {
+                const body = new URLSearchParams({ type, phase, page });
+                const res  = await fetch('api/api_admin_tmdb_import.php', { method: 'POST', body });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || 'Erreur serveur');
+
+                totalInserted += data.inserted;
+                totalSkipped  += data.skipped;
+                totalErrors   += data.errors;
+                done           = data.done;
+                const totalPages = data.total_pages || 500;
+                const pct = Math.min(100, ((data.phase * 500 + data.page) / (5 * totalPages)) * 100);
+
+                countEl.textContent = totalInserted;
+                barEl.style.width   = pct.toFixed(1) + '%';
+                phaseEl.textContent = `Phase ${data.phase + 1}/5 — ${phaseLabels[data.phase] || ''} · Page ${data.page}/${totalPages}`;
+                logEl.textContent   = `+${data.inserted} insérés · ${data.skipped} existants · ${data.errors} err — ${secs}s`;
+
+                if (!done) {
+                    phase = data.next_phase;
+                    page  = data.next_page;
+                }
+            }
+            clearInterval(timer);
+            barEl.style.width   = '100%';
+            phaseEl.textContent = 'Terminé';
+            logEl.style.color   = '#9dffb0';
+            logEl.textContent   = `✓ ${totalInserted} importés · ${totalSkipped} existants · ${totalErrors} erreurs · ${secs}s`;
+        } catch (e) {
+            clearInterval(timer);
+            logEl.style.color   = '#f87171';
+            logEl.textContent   = `✗ ${e.message}`;
+            phaseEl.textContent = 'Erreur';
+        }
+        btn.disabled = false;
+        if (otherBtn) otherBtn.disabled = false;
+        btn.textContent = '↺ Relancer';
     }
 
     async function pushBroadcast() {
