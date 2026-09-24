@@ -58,6 +58,7 @@ function renderHeader($user = null) {
         $vs = file_exists(__DIR__ . '/../assets/script.js') ? filemtime(__DIR__ . '/../assets/script.js') : 1;
         echo '<script src="assets/js/ui.js?v='  . $v  . '" defer></script>';
         echo '<script src="assets/script.js?v=' . $vs . '" defer></script>';
+        echo '<script defer src="https://app.caadesign.fr/t.js" data-site="751e8d8dee8d3d7d914b16d9c16fe958"></script>';
 
         // VAPID public key + push.js (logged-in users only)
         // push.js est toujours chargé — il gère lui-même la visibilité du bouton
