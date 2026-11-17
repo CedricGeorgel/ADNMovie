@@ -227,6 +227,23 @@ $userActivity = array_column($activityRows, 'cnt', 'user_id');
                     </div>
 
                     <div class="widget">
+                        <div class="widget-title">Supprimer un contenu</div>
+                        <p style="font-size:0.75rem;color:var(--text-dim);margin-bottom:14px;">
+                            Supprime un film ou une série et toutes ses données (notes, ADN, wishlist…) de la BDD.
+                        </p>
+                        <div style="display:flex;gap:8px;margin-bottom:10px;">
+                            <button id="deleteTypeMovie" class="btn-base active" style="flex:1;font-size:0.75rem;" onclick="setDeleteType('movie')">🎬 Film</button>
+                            <button id="deleteTypeTv"    class="btn-base"        style="flex:1;font-size:0.75rem;" onclick="setDeleteType('tv')">📺 Série</button>
+                        </div>
+                        <input id="deleteContentId" type="number" placeholder="TMDB ID"
+                               style="width:100%;box-sizing:border-box;padding:8px 10px;background:var(--card-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.85rem;margin-bottom:10px;">
+                        <div id="deleteContentLog" style="display:none;font-size:0.72rem;font-family:monospace;padding:8px 10px;background:var(--card-bg);border:1px solid var(--border);border-radius:6px;margin-bottom:10px;"></div>
+                        <button class="btn-base" style="width:100%;background:#ef4444;border-color:#ef4444;color:#fff;" onclick="runDeleteContent()">
+                            🗑 Supprimer
+                        </button>
+                    </div>
+
+                    <div class="widget">
                         <div class="widget-title">Oracle — Sync appréciations TMDB</div>
                         <p style="font-size:0.75rem;color:var(--text-dim);margin-bottom:14px;">
                             Recalcule le <code style="font-size:0.7rem;">like_score</code> Oracle sur tous les films depuis les votes TMDB (50&nbsp;%&nbsp;=&nbsp;0 chez nous).<br>
@@ -663,6 +680,38 @@ $userActivity = array_column($activityRows, 'cnt', 'user_id');
         const json = await res.json();
         msgEl.style.color = json.ok ? '#9dffb0' : 'var(--danger)';
         msgEl.textContent = json.ok ? `✓ Envoyé à ${json.sent} abonné(s).` : (json.error || 'Erreur');
+    }
+
+    let _deleteType = 'movie';
+    function setDeleteType(type) {
+        _deleteType = type;
+        document.getElementById('deleteTypeMovie').className = 'btn-base' + (type === 'movie' ? ' active' : '');
+        document.getElementById('deleteTypeTv').className    = 'btn-base' + (type === 'tv'    ? ' active' : '');
+    }
+
+    async function runDeleteContent() {
+        const tmdbId = parseInt(document.getElementById('deleteContentId').value);
+        const logEl  = document.getElementById('deleteContentLog');
+        if (!tmdbId || tmdbId <= 0) { alert('TMDB ID invalide'); return; }
+
+        const label = _deleteType === 'movie' ? 'ce film' : 'cette série';
+        if (!confirm(`Supprimer définitivement ${label} (TMDB #${tmdbId}) et toutes ses données ?`)) return;
+
+        logEl.style.display = 'block';
+        logEl.style.color   = 'var(--text-dim)';
+        logEl.textContent   = 'Suppression en cours…';
+
+        const res  = await fetch('api/api_admin_delete_content.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: _deleteType, tmdb_id: tmdbId }),
+        });
+        const json = await res.json();
+        logEl.style.color = json.ok ? '#9dffb0' : '#f87171';
+        logEl.textContent = json.ok
+            ? `✓ Supprimé : ${json.title ?? ('TMDB #' + json.tmdb_id)}`
+            : (json.error || 'Erreur');
+        if (json.ok) document.getElementById('deleteContentId').value = '';
     }
     </script>
 </body>
