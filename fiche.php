@@ -104,6 +104,21 @@ if ($contentType === 'movie') {
 
     $seriesStats = get_series_stats_by_tmdb($tmdbId);
 
+    // Appréciation moyenne communautaire
+    $seriesAvgLikeScore = null;
+    $seriesLocalRow = db_fetch_one('SELECT id FROM series WHERE tmdb_id = ?', [$tmdbId]);
+    if ($seriesLocalRow) {
+        $seriesAvgLikeRow = db_fetch_one(
+            "SELECT SUM(like_score * rating_weight) / SUM(rating_weight) AS avg_like
+             FROM series_ratings
+             WHERE series_id = ? AND like_score IS NOT NULL AND rating_weight > 0",
+            [(int)$seriesLocalRow['id']]
+        );
+        $seriesAvgLikeScore = ($seriesAvgLikeRow && $seriesAvgLikeRow['avg_like'] !== null)
+            ? round((float)$seriesAvgLikeRow['avg_like'], 1)
+            : null;
+    }
+
     // Note & wishlist de l'utilisateur connecté pour cette série
     $seriesIsLiked      = false;
     $seriesIsWishlisted = false;
@@ -405,6 +420,14 @@ $canonicalUrl  = 'https://adnmovie.fr/fiche.php?id=' . $tmdbId
                         true,
                         $seriesStats['count']
                     ); ?>
+                    <?php if ($seriesAvgLikeScore !== null): ?>
+                        <div style="margin-top:14px;text-align:center;padding:10px;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:10px;">
+                            <div style="font-size:0.6rem;font-weight:800;letter-spacing:1.5px;color:var(--text-dim);text-transform:uppercase;margin-bottom:4px;">Appréciation</div>
+                            <div style="font-size:1.4rem;font-weight:900;color:<?= $seriesAvgLikeScore >= 0 ? 'var(--pastel-blue)' : '#f87171' ?>;">
+                                <?= $seriesAvgLikeScore > 0 ? '+' : '' ?><?= $seriesAvgLikeScore ?>
+                            </div>
+                        </div>
+                    <?php endif; ?>
                     <?php if ($currentUser): ?>
                         <?php if ($seriesExistingScores): ?>
                             <p style="margin-top:12px; font-size:0.68rem; color:var(--text-dim); text-align:center; line-height:1.4;">
