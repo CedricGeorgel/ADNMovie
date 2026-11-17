@@ -190,6 +190,23 @@ function upsert_series_metadata(int $tmdbId, array $tmdbData): void
             $tmdbData['year']  ?? null,
         ]
     );
+
+    // Oracle — déclenché si la série n'a pas encore de note Oracle
+    $seriesRow = db_fetch_one('SELECT id FROM series WHERE tmdb_id = ?', [$tmdbId]);
+    if ($seriesRow) {
+        $hasOracle = db_fetch_one(
+            "SELECT 1 FROM series_ratings WHERE series_id = ? AND user_id = 'IA-ORACLE-001'",
+            [(int)$seriesRow['id']]
+        );
+        if (!$hasOracle) {
+            require_once __DIR__ . '/../api/api_oracle.php';
+            $genreNames = array_map(
+                fn($g) => is_array($g) ? ($g['name'] ?? '') : $g,
+                $tmdbData['genres'] ?? []
+            );
+            apply_oracle_judgment_series($tmdbId, array_filter($genreNames));
+        }
+    }
 }
 
 /**
