@@ -177,17 +177,19 @@ function upsert_series_metadata(int $tmdbId, array $tmdbData): void
     $posterUrl = sync_series_poster($tmdbId, $tmdbData['poster'] ?? '');
 
     db_execute(
-        'INSERT INTO series (tmdb_id, title, poster, year, created_at)
-         VALUES (?, ?, ?, ?, NOW())
+        'INSERT INTO series (tmdb_id, title, poster, year, total_seasons, created_at)
+         VALUES (?, ?, ?, ?, ?, NOW())
          ON DUPLICATE KEY UPDATE
-             title  = IF(title  = "" OR title  IS NULL, VALUES(title),  title),
-             poster = VALUES(poster),
-             year   = IF(year   IS NULL,                VALUES(year),   year)',
+             title         = IF(title  = "" OR title  IS NULL, VALUES(title),  title),
+             poster        = VALUES(poster),
+             year          = IF(year   IS NULL,                VALUES(year),   year),
+             total_seasons = IF(VALUES(total_seasons) > 0,     VALUES(total_seasons), total_seasons)',
         [
             $tmdbId,
-            $tmdbData['title'] ?? '',
+            $tmdbData['title']         ?? '',
             $posterUrl,
-            $tmdbData['year']  ?? null,
+            $tmdbData['year']          ?? null,
+            (int)($tmdbData['total_seasons'] ?? 0),
         ]
     );
 

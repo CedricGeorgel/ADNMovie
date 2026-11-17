@@ -235,8 +235,16 @@ $userActivity = array_column($activityRows, 'cnt', 'user_id');
                             <button id="deleteTypeMovie" class="btn-base active" style="flex:1;font-size:0.75rem;" onclick="setDeleteType('movie')">🎬 Film</button>
                             <button id="deleteTypeTv"    class="btn-base"        style="flex:1;font-size:0.75rem;" onclick="setDeleteType('tv')">📺 Série</button>
                         </div>
-                        <input id="deleteContentId" type="number" placeholder="TMDB ID"
-                               style="width:100%;box-sizing:border-box;padding:8px 10px;background:var(--card-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.85rem;margin-bottom:10px;">
+                        <div style="position:relative;margin-bottom:10px;">
+                            <input id="deleteSearchInput" type="text" placeholder="Rechercher par nom…"
+                                   oninput="onDeleteSearch(this.value)"
+                                   style="width:100%;box-sizing:border-box;padding:8px 10px;background:var(--card-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.85rem;">
+                            <div id="deleteSearchResults" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card-bg);border:1px solid var(--border);border-radius:0 0 8px 8px;z-index:100;max-height:220px;overflow-y:auto;"></div>
+                        </div>
+                        <div id="deleteSelected" style="display:none;font-size:0.78rem;padding:7px 10px;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;margin-bottom:10px;color:var(--text-dim);">
+                            Aucun contenu sélectionné
+                        </div>
+                        <input id="deleteContentId" type="hidden" value="">
                         <div id="deleteContentLog" style="display:none;font-size:0.72rem;font-family:monospace;padding:8px 10px;background:var(--card-bg);border:1px solid var(--border);border-radius:6px;margin-bottom:10px;"></div>
                         <button class="btn-base" style="width:100%;background:#ef4444;border-color:#ef4444;color:#fff;" onclick="runDeleteContent()">
                             🗑 Supprimer
@@ -683,19 +691,75 @@ $userActivity = array_column($activityRows, 'cnt', 'user_id');
     }
 
     let _deleteType = 'movie';
+    let _deleteSearchTimer = null;
+
     function setDeleteType(type) {
         _deleteType = type;
         document.getElementById('deleteTypeMovie').className = 'btn-base' + (type === 'movie' ? ' active' : '');
         document.getElementById('deleteTypeTv').className    = 'btn-base' + (type === 'tv'    ? ' active' : '');
+        // Reset selection on type change
+        document.getElementById('deleteContentId').value = '';
+        document.getElementById('deleteSearchInput').value = '';
+        document.getElementById('deleteSelected').style.display = 'none';
+        document.getElementById('deleteSearchResults').style.display = 'none';
+    }
+
+    function onDeleteSearch(q) {
+        clearTimeout(_deleteSearchTimer);
+        const res = document.getElementById('deleteSearchResults');
+        if (q.trim().length < 2) { res.style.display = 'none'; return; }
+        _deleteSearchTimer = setTimeout(() => fetchDeleteSearchResults(q.trim()), 350);
+    }
+
+    async function fetchDeleteSearchResults(q) {
+        const res  = document.getElementById('deleteSearchResults');
+        const type = _deleteType === 'movie' ? 'movie' : 'tv';
+        const key  = '<?= defined('TMDB_API_KEY') ? TMDB_API_KEY : '' ?>';
+        const url  = `https://api.themoviedb.org/3/search/${type}?api_key=${key}&query=${encodeURIComponent(q)}&language=fr-FR&page=1`;
+
+        res.innerHTML = '<div style="padding:8px 12px;font-size:0.75rem;color:var(--text-dim);">Recherche…</div>';
+        res.style.display = 'block';
+
+        try {
+            const data = await (await fetch(url)).json();
+            const items = (data.results || []).slice(0, 7);
+            if (!items.length) {
+                res.innerHTML = '<div style="padding:8px 12px;font-size:0.75rem;color:var(--text-dim);">Aucun résultat</div>';
+                return;
+            }
+            res.innerHTML = items.map(it => {
+                const title = it.title || it.name || '—';
+                const year  = (it.release_date || it.first_air_date || '').slice(0, 4);
+                return `<div onclick="selectDeleteResult(${it.id}, ${JSON.stringify(title).replace(/'/g,"\\'")})"
+                             style="padding:8px 12px;cursor:pointer;font-size:0.8rem;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;"
+                             onmouseover="this.style.background='rgba(255,255,255,0.07)'"
+                             onmouseout="this.style.background=''">
+                            <span>${title}</span>
+                            <span style="font-size:0.7rem;color:var(--text-dim);">${year} · #${it.id}</span>
+                        </div>`;
+            }).join('');
+        } catch(e) {
+            res.innerHTML = '<div style="padding:8px 12px;font-size:0.75rem;color:#f87171;">Erreur TMDB</div>';
+        }
+    }
+
+    function selectDeleteResult(tmdbId, title) {
+        document.getElementById('deleteContentId').value      = tmdbId;
+        document.getElementById('deleteSearchInput').value    = title;
+        document.getElementById('deleteSearchResults').style.display = 'none';
+        const sel = document.getElementById('deleteSelected');
+        sel.style.display = 'block';
+        sel.textContent   = `Sélectionné : ${title} (TMDB #${tmdbId})`;
     }
 
     async function runDeleteContent() {
         const tmdbId = parseInt(document.getElementById('deleteContentId').value);
         const logEl  = document.getElementById('deleteContentLog');
-        if (!tmdbId || tmdbId <= 0) { alert('TMDB ID invalide'); return; }
+        if (!tmdbId || tmdbId <= 0) { alert('Sélectionne d\'abord un contenu'); return; }
 
+        const title = document.getElementById('deleteSelected').textContent.replace('Sélectionné : ', '');
         const label = _deleteType === 'movie' ? 'ce film' : 'cette série';
-        if (!confirm(`Supprimer définitivement ${label} (TMDB #${tmdbId}) et toutes ses données ?`)) return;
+        if (!confirm(`Supprimer définitivement ${label} et toutes ses données ?\n\n${title}`)) return;
 
         logEl.style.display = 'block';
         logEl.style.color   = 'var(--text-dim)';
@@ -711,7 +775,11 @@ $userActivity = array_column($activityRows, 'cnt', 'user_id');
         logEl.textContent = json.ok
             ? `✓ Supprimé : ${json.title ?? ('TMDB #' + json.tmdb_id)}`
             : (json.error || 'Erreur');
-        if (json.ok) document.getElementById('deleteContentId').value = '';
+        if (json.ok) {
+            document.getElementById('deleteContentId').value      = '';
+            document.getElementById('deleteSearchInput').value    = '';
+            document.getElementById('deleteSelected').style.display = 'none';
+        }
     }
     </script>
 </body>
