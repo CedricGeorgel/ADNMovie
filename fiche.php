@@ -19,6 +19,28 @@ require_once 'components/comment.php';
 require_once 'components/signal-btn.php';
 require_once 'functions/api_tmdb.php';
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function renderDnaMatchBlock(array $m): void {
+    $g = $m['global'];
+    $gColor = $g >= 70 ? '#9dffb0' : ($g >= 40 ? '#fcd34d' : '#f87171');
+    echo '<div style="margin-top:14px;padding:12px;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:10px;">';
+    echo '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">';
+    echo '<div style="font-size:0.6rem;font-weight:800;letter-spacing:1.5px;color:var(--text-dim);text-transform:uppercase;">Compatibilité ADN</div>';
+    echo '<div style="font-size:1.3rem;font-weight:900;color:' . $gColor . ';">' . $g . '%</div>';
+    echo '</div>';
+    foreach ($m['genes'] as $gene) {
+        $c = $gene['score'] >= 70 ? '#9dffb0' : ($gene['score'] >= 40 ? '#fcd34d' : '#f87171');
+        echo '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">';
+        echo '<div style="width:72px;font-size:0.6rem;color:var(--text-dim);flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' . htmlspecialchars($gene['label']) . '</div>';
+        echo '<div style="flex:1;height:4px;background:rgba(255,255,255,0.08);border-radius:2px;overflow:hidden;">';
+        echo '<div style="width:' . $gene['score'] . '%;height:100%;background:' . $c . ';border-radius:2px;"></div>';
+        echo '</div>';
+        echo '<div style="width:28px;font-size:0.6rem;color:' . $c . ';text-align:right;font-weight:700;">' . $gene['score'] . '%</div>';
+        echo '</div>';
+    }
+    echo '</div>';
+}
+
 // ── Paramètres URL ────────────────────────────────────────────────────────────
 $tmdbId  = (int)($_GET['id'] ?? 0);
 $type    = $_GET['type'] ?? 'movie';  // movie|tv
@@ -73,6 +95,19 @@ if ($contentType === 'movie') {
         : null;
     $avgLikeCount = (int)($avgLikeRow['human_cnt'] ?? 0);
 
+    // Match ADN utilisateur ↔ film
+    $dnaMatch = null;
+    if ($userId) {
+        $userDnaRows    = db_fetch_all('SELECT criterio, avg_score FROM user_dna WHERE user_id = ?', [$userId]);
+        $contentDnaRows = db_fetch_all('SELECT criterio, avg_score FROM movie_dna WHERE movie_id = ?', [$movieId]);
+        if ($userDnaRows && $contentDnaRows) {
+            $dnaMatch = compute_dna_match(
+                array_column($userDnaRows,    'avg_score', 'criterio'),
+                array_column($contentDnaRows, 'avg_score', 'criterio')
+            );
+        }
+    }
+
     $isLiked           = false;
     $isWishlisted      = false;
     $existingLikeScore = null;
@@ -117,6 +152,19 @@ if ($contentType === 'movie') {
         $seriesAvgLikeScore = ($seriesAvgLikeRow && $seriesAvgLikeRow['avg_like'] !== null)
             ? round((float)$seriesAvgLikeRow['avg_like'], 1)
             : null;
+    }
+
+    // Match ADN utilisateur ↔ série
+    $seriesDnaMatch = null;
+    if ($userId && $seriesLocalRow) {
+        $userDnaRows    = db_fetch_all('SELECT criterio, avg_score FROM user_series_dna WHERE user_id = ?', [$userId]);
+        $contentDnaRows = db_fetch_all('SELECT criterio, avg_score FROM series_dna WHERE series_id = ?', [(int)$seriesLocalRow['id']]);
+        if ($userDnaRows && $contentDnaRows) {
+            $seriesDnaMatch = compute_dna_match(
+                array_column($userDnaRows,    'avg_score', 'criterio'),
+                array_column($contentDnaRows, 'avg_score', 'criterio')
+            );
+        }
     }
 
     // Note & wishlist de l'utilisateur connecté pour cette série
@@ -319,6 +367,9 @@ $canonicalUrl  = 'https://adnmovie.fr/fiche.php?id=' . $tmdbId
                             </div>
                         </div>
                     <?php endif; ?>
+                    <?php if ($dnaMatch !== null): ?>
+                        <?php renderDnaMatchBlock($dnaMatch); ?>
+                    <?php endif; ?>
                     <?php if ($currentUser): ?>
                         <div style="margin-top:15px; display:flex; flex-direction:column; gap:8px;">
                             <button class="btn-base active" onclick="openRateModal()" style="width:100%;">
@@ -427,6 +478,9 @@ $canonicalUrl  = 'https://adnmovie.fr/fiche.php?id=' . $tmdbId
                                 <?= $seriesAvgLikeScore > 0 ? '+' : '' ?><?= $seriesAvgLikeScore ?>
                             </div>
                         </div>
+                    <?php endif; ?>
+                    <?php if ($seriesDnaMatch !== null): ?>
+                        <?php renderDnaMatchBlock($seriesDnaMatch); ?>
                     <?php endif; ?>
                     <?php if ($currentUser): ?>
                         <?php if ($seriesExistingScores): ?>

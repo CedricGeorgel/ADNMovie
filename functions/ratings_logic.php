@@ -571,3 +571,49 @@ function refresh_user_backdrop(string $userId): void {
         [$row['poster'] ?? null, $userId]
     );
 }
+// ─────────────────────────────────────────────────────────────────────────────
+// MATCH ADN
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Calcule la compatibilité entre l'ADN utilisateur et celui d'un contenu.
+ * user/content : [criterio => score] sur l'échelle -10/+10.
+ *
+ * Retourne :
+ *   global  : int 0-100 (coverage score : alignement directionnel pondéré)
+ *   genes   : array de ['key', 'label', 'score' (0-100), 'user', 'content']
+ */
+function compute_dna_match(array $user, array $content): array
+{
+    $labels = ['complexite'=>'Complexité','previsibilite'=>'Prévisibilité','intensite'=>'Intensité',
+               'malaise'=>'Malaise','stylisation'=>'Stylisation','dynamique'=>'Dynamique',
+               'depaysement'=>'Dépaysement','coherence'=>'Cohérence'];
+
+    // Global : coverage score (même direction = on comptabilise min des deux)
+    $magnitude = 0.0;
+    foreach ($user as $v) $magnitude += abs((float)$v);
+    $global = 0;
+    if ($magnitude > 0.001) {
+        $aligned = 0.0;
+        foreach ($user as $k => $uv) {
+            $uv = (float)$uv;
+            if (abs($uv) < 0.001) continue;
+            $cv = (float)($content[$k] ?? 0);
+            if ($uv > 0 && $cv > 0)       $aligned += min($uv, $cv);
+            elseif ($uv < 0 && $cv < 0)   $aligned += min(abs($uv), abs($cv));
+        }
+        $global = (int)round($aligned / $magnitude * 100);
+    }
+
+    // Par gène : proximité linéaire sur échelle [-10,+10] (écart max = 20)
+    $genes = [];
+    foreach (CRITERIA as $k) {
+        $uv  = (float)($user[$k]    ?? 0);
+        $cv  = (float)($content[$k] ?? 0);
+        $pct = (int)max(0, round((20 - abs($uv - $cv)) / 20 * 100));
+        $genes[] = ['key' => $k, 'label' => $labels[$k], 'score' => $pct,
+                    'user' => round($uv, 1), 'content' => round($cv, 1)];
+    }
+
+    return ['global' => $global, 'genes' => $genes];
+}
