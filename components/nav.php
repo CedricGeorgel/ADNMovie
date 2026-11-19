@@ -15,6 +15,7 @@ function renderNav($activePage = 'home') {
         //$menu['communaute']      = ['label' => 'Communauté',     'url' => 'communaute.php'];
         //$menu['rooms']           = ['label' => 'Sessions',       'url' => 'rooms.php'];
         $menu['recommendations'] = ['label' => 'Séquençage ADN', 'url' => 'recommendations.php'];
+        $menu['shoot']           = ['label' => 'Shoot',           'url' => 'shoot.php'];
         //$menu['mood']            = ['label' => 'Ce soir...',     'url' => 'mood.php'];
     }
 
