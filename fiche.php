@@ -21,23 +21,77 @@ require_once 'functions/api_tmdb.php';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function renderDnaMatchBlock(array $m): void {
-    $g = $m['global'];
+    // Global = moyenne des scores de proximité (cohérent avec les barres)
+    $scores = array_column($m['genes'], 'score');
+    $g      = (int)round(array_sum($scores) / max(1, count($scores)));
     $gColor = $g >= 70 ? '#9dffb0' : ($g >= 40 ? '#fcd34d' : '#f87171');
+
+    // Trier pour le résumé
+    $sorted = $m['genes'];
+    usort($sorted, fn($a, $b) => $b['score'] <=> $a['score']);
+    $forts    = array_slice($sorted, 0, 3);
+    $frictions = array_filter($sorted, fn($g) => $g['score'] < 55);
+    $frictions = array_slice(array_values($frictions), -2); // les 2 pires
+
+    $COLOR_USER    = '#7dd3fc'; // bleu
+    $COLOR_CONTENT = '#fcd34d'; // jaune
+
     echo '<div style="margin-top:14px;padding:12px;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:10px;">';
+
+    // ── En-tête ──
     echo '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">';
-    echo '<div style="font-size:0.6rem;font-weight:800;letter-spacing:1.5px;color:var(--text-dim);text-transform:uppercase;">Compatibilité ADN</div>';
+    echo '<div style="font-size:0.6rem;font-weight:800;letter-spacing:1.5px;color:var(--text-dim);text-transform:uppercase;">Match ADN</div>';
     echo '<div style="font-size:1.3rem;font-weight:900;color:' . $gColor . ';">' . $g . '%</div>';
     echo '</div>';
+
+    // ── Légende ──
+    echo '<div style="display:flex;gap:10px;margin-bottom:10px;font-size:0.58rem;color:var(--text-dim);">';
+    echo '<span style="display:flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;border-radius:50%;background:' . $COLOR_USER . ';display:inline-block;"></span>Toi</span>';
+    echo '<span style="display:flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;border-radius:50%;background:' . $COLOR_CONTENT . ';display:inline-block;"></span>Ce contenu</span>';
+    echo '</div>';
+
+    // ── Axe par gène ──
     foreach ($m['genes'] as $gene) {
-        $c = $gene['score'] >= 70 ? '#9dffb0' : ($gene['score'] >= 40 ? '#fcd34d' : '#f87171');
-        echo '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">';
-        echo '<div style="width:72px;font-size:0.6rem;color:var(--text-dim);flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' . htmlspecialchars($gene['label']) . '</div>';
-        echo '<div style="flex:1;height:4px;background:rgba(255,255,255,0.08);border-radius:2px;overflow:hidden;">';
-        echo '<div style="width:' . $gene['score'] . '%;height:100%;background:' . $c . ';border-radius:2px;"></div>';
+        $uPct = round(($gene['user']    + 10) / 20 * 100);
+        $cPct = round(($gene['content'] + 10) / 20 * 100);
+        $aligned = ($gene['user'] >= 0) === ($gene['content'] >= 0) || abs($gene['user']) < 0.5 || abs($gene['content']) < 0.5;
+        $trackColor = $aligned ? 'rgba(125,211,252,0.15)' : 'rgba(248,113,113,0.12)';
+
+        echo '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">';
+        echo '<div style="width:70px;font-size:0.59rem;color:var(--text-dim);flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' . htmlspecialchars($gene['label']) . '">' . htmlspecialchars($gene['label']) . '</div>';
+        echo '<div style="flex:1;position:relative;height:14px;">';
+        // piste
+        echo '<div style="position:absolute;top:50%;left:0;right:0;height:2px;background:' . $trackColor . ';transform:translateY(-50%);border-radius:1px;"></div>';
+        // centre (zéro)
+        echo '<div style="position:absolute;top:50%;left:50%;width:1px;height:6px;background:rgba(255,255,255,0.15);transform:translate(-50%,-50%);"></div>';
+        // point contenu
+        echo '<div style="position:absolute;top:50%;left:' . $cPct . '%;width:8px;height:8px;border-radius:50%;background:' . $COLOR_CONTENT . ';transform:translate(-50%,-50%);opacity:0.9;" title="Contenu: ' . $gene['content'] . '"></div>';
+        // point utilisateur (au-dessus)
+        echo '<div style="position:absolute;top:50%;left:' . $uPct . '%;width:8px;height:8px;border-radius:50%;background:' . $COLOR_USER . ';transform:translate(-50%,-50%);border:1px solid rgba(0,0,0,0.3);" title="Toi: ' . $gene['user'] . '"></div>';
         echo '</div>';
-        echo '<div style="width:28px;font-size:0.6rem;color:' . $c . ';text-align:right;font-weight:700;">' . $gene['score'] . '%</div>';
         echo '</div>';
     }
+
+    // ── Résumé ──
+    echo '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">';
+    if ($forts) {
+        echo '<div style="font-size:0.58rem;color:var(--text-dim);margin-bottom:4px;">Points forts</div>';
+        echo '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">';
+        foreach ($forts as $f) {
+            echo '<span style="font-size:0.58rem;padding:2px 6px;border-radius:4px;background:rgba(157,255,176,0.12);color:#9dffb0;border:1px solid rgba(157,255,176,0.25);">' . htmlspecialchars($f['label']) . '</span>';
+        }
+        echo '</div>';
+    }
+    if ($frictions) {
+        echo '<div style="font-size:0.58rem;color:var(--text-dim);margin-bottom:4px;">Points de friction</div>';
+        echo '<div style="display:flex;flex-wrap:wrap;gap:4px;">';
+        foreach ($frictions as $f) {
+            echo '<span style="font-size:0.58rem;padding:2px 6px;border-radius:4px;background:rgba(248,113,113,0.1);color:#f87171;border:1px solid rgba(248,113,113,0.25);">' . htmlspecialchars($f['label']) . '</span>';
+        }
+        echo '</div>';
+    }
+    echo '</div>';
+
     echo '</div>';
 }
 
