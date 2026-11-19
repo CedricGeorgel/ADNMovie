@@ -61,7 +61,7 @@ $collectionPublic = $privacySettings['collection_public'] ?? true;
 $wishlistPublic   = $privacySettings['wishlist_public']   ?? true;
 $contentPublic    = $privacySettings['content_public']    ?? true;
 
-$backdropImage = $user['backdrop_poster'] ?? null;
+$backdropImage = $user['avatar'] ?? null;
 
 $profileStats = db_fetch_one(
     "SELECT

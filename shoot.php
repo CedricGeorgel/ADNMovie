@@ -101,7 +101,6 @@ $seriesWhereExtra = '';
 $seriesParams     = [];
 if ($platformSeriesIds !== null) {
     if (empty($platformSeriesIds)) {
-        // Abonnements connus mais aucune série disponible dessus
         $topSeries = null;
     } else {
         $inPH = implode(',', array_fill(0, count($platformSeriesIds), '?'));
