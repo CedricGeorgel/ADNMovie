@@ -18,15 +18,15 @@ $user   = get_user_by_id($userId);
 $subscribedIds = array_map('intval', json_decode($user['user_platforms'] ?? '[]', true) ?: []);
 $hasPlatforms  = !empty($subscribedIds);
 
-// ── Films déjà vus ────────────────────────────────────────────────────────────
+// ── Films déjà vus (hors Oracle) ─────────────────────────────────────────────
 $seenMovieIds = array_column(
-    db_fetch_all('SELECT movie_id FROM ratings WHERE user_id = ?', [$userId]),
+    db_fetch_all("SELECT movie_id FROM ratings WHERE user_id = ? AND user_id != 'IA-ORACLE-001'", [$userId]),
     'movie_id'
 ) ?: [0];
 
-// ── Séries déjà vues ──────────────────────────────────────────────────────────
+// ── Séries déjà vues (hors Oracle) ───────────────────────────────────────────
 $seenSeriesIds = array_column(
-    db_fetch_all('SELECT series_id FROM series_ratings WHERE user_id = ?', [$userId]),
+    db_fetch_all("SELECT series_id FROM series_ratings WHERE user_id = ? AND user_id != 'IA-ORACLE-001'", [$userId]),
     'series_id'
 ) ?: [0];
 
@@ -62,7 +62,7 @@ if (!empty($platformMovieIds)) {
          JOIN ratings r ON r.movie_id = m.tmdb_id AND r.like_score IS NOT NULL
          WHERE m.tmdb_id IN ($inPlaceholders)
          GROUP BY m.tmdb_id
-         HAVING vote_count >= 2
+         HAVING vote_count >= 1
          ORDER BY community_score DESC, vote_count DESC
          LIMIT 1",
         $platformMovieIds
@@ -73,26 +73,62 @@ if (!empty($platformMovieIds)) {
     }
 }
 
-// ── Série : meilleur score communautaire (pas de providers_data en base) ───────
+// ── Série : meilleur score communautaire, filtrée par abonnements si dispo ────
 $topSeries      = null;
 $topSeriesScore = null;
 
-$seenIn      = implode(',', $seenSeriesIds);
-$topSeriesRow = db_fetch_one(
-    "SELECT s.tmdb_id AS id, s.title, s.poster, s.year, s.total_votes,
-            ROUND(AVG(sr.like_score), 1) AS community_score,
-            COUNT(sr.like_score)         AS vote_count
-     FROM series s
-     JOIN series_ratings sr ON sr.series_id = s.id AND sr.like_score IS NOT NULL
-     WHERE s.id NOT IN ($seenIn)
-     GROUP BY s.id
-     HAVING vote_count >= 2
-     ORDER BY community_score DESC, vote_count DESC
-     LIMIT 1"
-);
-if ($topSeriesRow) {
-    $topSeries      = $topSeriesRow;
-    $topSeriesScore = (float)$topSeriesRow['community_score'];
+$seenIn = implode(',', $seenSeriesIds);
+
+// Filtrage par plateforme si providers_data existe sur la table series
+$platformSeriesIds = null;
+if ($hasPlatforms) {
+    $allSeriesWithProviders = db_fetch_all(
+        'SELECT tmdb_id, providers_data FROM series WHERE providers_data IS NOT NULL AND providers_data != "[]"'
+    );
+    if (!empty($allSeriesWithProviders)) {
+        $platformSeriesIds = [];
+        foreach ($allSeriesWithProviders as $s) {
+            $data    = json_decode($s['providers_data'], true) ?: [];
+            $flatIds = array_column($data['flatrate'] ?? [], 'provider_id');
+            if (array_intersect($subscribedIds, $flatIds)) {
+                $platformSeriesIds[] = (int)$s['tmdb_id'];
+            }
+        }
+    }
+}
+
+$seriesWhereExtra = '';
+$seriesParams     = [];
+if ($platformSeriesIds !== null) {
+    if (empty($platformSeriesIds)) {
+        // Abonnements connus mais aucune série disponible dessus
+        $topSeries = null;
+    } else {
+        $inPH = implode(',', array_fill(0, count($platformSeriesIds), '?'));
+        $seriesWhereExtra = "AND s.tmdb_id IN ($inPH)";
+        $seriesParams     = $platformSeriesIds;
+    }
+}
+
+if ($platformSeriesIds === null || !empty($platformSeriesIds)) {
+    $topSeriesRow = db_fetch_one(
+        "SELECT s.tmdb_id AS id, s.title, s.poster, s.year, s.total_votes,
+                ROUND(AVG(sr.like_score), 1) AS community_score,
+                COUNT(sr.like_score)         AS vote_count
+         FROM series s
+         JOIN series_ratings sr ON sr.series_id = s.id AND sr.like_score IS NOT NULL
+         WHERE s.id NOT IN ($seenIn)
+           $seriesWhereExtra
+         GROUP BY s.id
+         HAVING vote_count >= 1
+         ORDER BY community_score DESC, vote_count DESC
+         LIMIT 1",
+        $seriesParams
+    );
+    if ($topSeriesRow) {
+        $topSeries      = $topSeriesRow;
+        $topSeriesScore = (float)$topSeriesRow['community_score'];
+    }
 }
 
 function formatCommunityScore(float $score): string {
