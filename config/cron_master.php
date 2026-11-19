@@ -448,6 +448,76 @@ try {
     echo "[ERREUR] Tâche 7 : " . $e->getMessage() . "\n\n";
 }
 
+// ── TÂCHE 7b : Refresh watch providers SÉRIES (TTL 3 jours, batch 30) ────────
+echo "-> Lancement Tâche 7b : Refresh watch providers séries...\n";
+flush();
+try {
+    if (!defined('TMDB_API_KEY') || empty(TMDB_API_KEY)) throw new Exception("Clé TMDB_API_KEY manquante.");
+
+    // Créer les colonnes si elles n'existent pas encore
+    $pdo = getPDO();
+    $cols = $pdo->query("SHOW COLUMNS FROM series LIKE 'providers_data'")->fetchAll();
+    if (empty($cols)) {
+        $pdo->exec("ALTER TABLE series
+            ADD COLUMN providers_data TEXT NULL DEFAULT NULL,
+            ADD COLUMN providers_updated_at DATETIME NULL DEFAULT NULL");
+        echo "  [MIGRATION] Colonnes providers_data / providers_updated_at ajoutées à series.\n";
+    }
+
+    $staleSeries = db_fetch_all(
+        "SELECT tmdb_id FROM series
+         WHERE providers_updated_at IS NULL
+            OR providers_updated_at < DATE_SUB(NOW(), INTERVAL 3 DAY)
+         ORDER BY providers_updated_at IS NOT NULL ASC, providers_updated_at ASC
+         LIMIT 30",
+        []
+    );
+
+    $refreshed = 0;
+    $errors    = 0;
+
+    foreach ($staleSeries as $serie) {
+        $sid = (int) $serie['tmdb_id'];
+        $url = "https://api.themoviedb.org/3/tv/{$sid}/watch/providers?api_key=" . TMDB_API_KEY;
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 8,
+            CURLOPT_USERAGENT      => 'AdnMovie-App/2.0',
+        ]);
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($httpCode === 200 && $response) {
+            $data      = json_decode($response, true);
+            $providers = $data['results']['FR'] ?? [];
+            db_execute(
+                'UPDATE series SET providers_data = ?, providers_updated_at = NOW() WHERE tmdb_id = ?',
+                [json_encode($providers, JSON_UNESCAPED_UNICODE), $sid]
+            );
+            $refreshed++;
+        } else {
+            db_execute(
+                'UPDATE series SET providers_updated_at = NOW() WHERE tmdb_id = ? AND providers_updated_at IS NULL',
+                [$sid]
+            );
+            $errors++;
+        }
+
+        usleep(250_000);
+    }
+
+    $report['tasks']['series_providers_refreshed'] = $refreshed;
+    echo "[OK] Watch providers séries : $refreshed mis à jour, $errors erreurs API (sur " . count($staleSeries) . " traitées).\n\n";
+
+} catch (Exception $e) {
+    $report['errors'][] = "Tâche 7b : " . $e->getMessage();
+    $report['tasks']['series_providers_refreshed'] = 0;
+    echo "[ERREUR] Tâche 7b : " . $e->getMessage() . "\n\n";
+}
+
 // ── TÂCHE 8 : Purge notifications lues (> 30 jours) ─────────────────────────
 echo "-> Lancement Tâche 8 : Purge notifications lues...\n";
 flush();
