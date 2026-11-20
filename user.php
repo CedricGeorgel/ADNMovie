@@ -538,6 +538,7 @@ if ($isOwnProfile && !empty($_SESSION['signal_perdu'])) {
             </section>
             <?php endif; ?>
 
+            <?php if (false): // SOCIAL — créations ?>
             <!-- ═══════════════ CRÉATIONS ═══════════════ -->
             <section style="margin-top:30px;">
                 <div class="dash-card-header" style="display:flex;justify-content:space-between;align-items:center;">
@@ -564,6 +565,7 @@ if ($isOwnProfile && !empty($_SESSION['signal_perdu'])) {
                 </div>
                 <?php endif; ?>
             </section>
+            <?php endif; // end SOCIAL — créations ?>
 
             <?php if ($isOwnProfile): ?>
 
