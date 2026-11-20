@@ -731,33 +731,45 @@ if ($isOwnProfile && !empty($_SESSION['signal_perdu'])) {
 
                         <!-- ── Onglet Données ── -->
                         <div id="tab-donnees" style="display:none;">
-                            <p style="font-size:0.7rem;color:var(--text-dim);margin-bottom:24px;line-height:1.6;">Gérez les données générées par votre activité sur la plateforme.</p>
 
-                            <div style="display:flex;flex-direction:column;gap:12px;">
-                                <div style="border:1px solid var(--border);border-radius:12px;padding:18px 20px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+                            <!-- Shoot -->
+                            <div style="font-size:0.6rem;font-weight:800;letter-spacing:2px;color:var(--text-dim);margin-bottom:10px;">SHOOT</div>
+                            <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:28px;">
+                                <div style="border:1px solid var(--border);border-radius:12px;padding:16px 18px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
                                     <div>
-                                        <div style="font-size:0.75rem;font-weight:700;color:var(--text-main);margin-bottom:4px;">Films écartés (Shoot)</div>
-                                        <div style="font-size:0.65rem;color:var(--text-dim);line-height:1.5;">Remet en jeu tous les films passés avec "Pas ce soir".</div>
+                                        <div style="font-size:0.72rem;font-weight:700;color:var(--text-main);margin-bottom:3px;">Films passés ce soir</div>
+                                        <div style="font-size:0.62rem;color:var(--text-dim);line-height:1.5;">Remet en jeu les films écartés avec "Pas ce soir".</div>
                                     </div>
-                                    <button onclick="resetSkipped('movies', this)"
-                                            style="flex-shrink:0;padding:9px 16px;border-radius:8px;border:1px solid rgba(255,180,0,0.3);background:rgba(255,180,0,0.07);color:#fbbf24;font-size:0.65rem;font-weight:700;letter-spacing:1px;cursor:pointer;white-space:nowrap;transition:background .2s;"
-                                            onmouseover="this.style.background='rgba(255,180,0,0.15)'" onmouseout="this.style.background='rgba(255,180,0,0.07)'">
-                                        RÉINITIALISER
-                                    </button>
+                                    <button onclick="resetSkipped('shoot_movies', this)" style="<?= $resetBtnStyle = 'flex-shrink:0;padding:8px 14px;border-radius:8px;border:1px solid rgba(255,180,0,0.3);background:rgba(255,180,0,0.07);color:#fbbf24;font-size:0.62rem;font-weight:700;letter-spacing:1px;cursor:pointer;white-space:nowrap;' ?>">RÉINITIALISER</button>
                                 </div>
-
-                                <div style="border:1px solid var(--border);border-radius:12px;padding:18px 20px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+                                <div style="border:1px solid var(--border);border-radius:12px;padding:16px 18px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
                                     <div>
-                                        <div style="font-size:0.75rem;font-weight:700;color:var(--text-main);margin-bottom:4px;">Séries écartées (Shoot)</div>
-                                        <div style="font-size:0.65rem;color:var(--text-dim);line-height:1.5;">Remet en jeu toutes les séries passées avec "Pas ce soir".</div>
+                                        <div style="font-size:0.72rem;font-weight:700;color:var(--text-main);margin-bottom:3px;">Séries passées ce soir</div>
+                                        <div style="font-size:0.62rem;color:var(--text-dim);line-height:1.5;">Remet en jeu les séries écartées avec "Pas ce soir".</div>
                                     </div>
-                                    <button onclick="resetSkipped('series', this)"
-                                            style="flex-shrink:0;padding:9px 16px;border-radius:8px;border:1px solid rgba(255,180,0,0.3);background:rgba(255,180,0,0.07);color:#fbbf24;font-size:0.65rem;font-weight:700;letter-spacing:1px;cursor:pointer;white-space:nowrap;transition:background .2s;"
-                                            onmouseover="this.style.background='rgba(255,180,0,0.15)'" onmouseout="this.style.background='rgba(255,180,0,0.07)'">
-                                        RÉINITIALISER
-                                    </button>
+                                    <button onclick="resetSkipped('shoot_series', this)" style="<?= $resetBtnStyle ?>">RÉINITIALISER</button>
                                 </div>
                             </div>
+
+                            <!-- Séquençage ADN -->
+                            <div style="font-size:0.6rem;font-weight:800;letter-spacing:2px;color:var(--text-dim);margin-bottom:10px;">SÉQUENÇAGE ADN</div>
+                            <div style="display:flex;flex-direction:column;gap:10px;">
+                                <div style="border:1px solid var(--border);border-radius:12px;padding:16px 18px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+                                    <div>
+                                        <div style="font-size:0.72rem;font-weight:700;color:var(--text-main);margin-bottom:3px;">Films exclus de l'algo</div>
+                                        <div style="font-size:0.62rem;color:var(--text-dim);line-height:1.5;">Remet en jeu les films que vous avez rejetés (✕) depuis vos recommandations.</div>
+                                    </div>
+                                    <button onclick="resetSkipped('algo_movies', this)" style="<?= $resetBtnStyle ?>">RÉINITIALISER</button>
+                                </div>
+                                <div style="border:1px solid var(--border);border-radius:12px;padding:16px 18px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+                                    <div>
+                                        <div style="font-size:0.72rem;font-weight:700;color:var(--text-main);margin-bottom:3px;">Séries exclues de l'algo</div>
+                                        <div style="font-size:0.62rem;color:var(--text-dim);line-height:1.5;">Remet en jeu les séries que vous avez rejetées (✕) depuis vos recommandations.</div>
+                                    </div>
+                                    <button onclick="resetSkipped('algo_series', this)" style="<?= $resetBtnStyle ?>">RÉINITIALISER</button>
+                                </div>
+                            </div>
+
                         </div>
 
                     </div>

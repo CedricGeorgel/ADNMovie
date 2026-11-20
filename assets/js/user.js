@@ -10,9 +10,6 @@ function switchProfileTab(tab) {
 }
 
 async function resetSkipped(type, btn) {
-    const labels = { movies: 'films', series: 'séries' };
-    const label  = labels[type] || type;
-    if (!confirm(`Remettre en jeu tous les ${label} passés avec "Pas ce soir" ?`)) return;
     const orig = btn.textContent;
     btn.textContent = '…';
     btn.disabled = true;
