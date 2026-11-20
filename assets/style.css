@@ -400,6 +400,7 @@ hr.section-divider { border: none; border-top: 1px dashed var(--border); margin:
    ========================================================================== */
 .movie-detail-layout { display: flex; gap: 50px; margin-top: 40px; }
 .movie-sidebar { flex: 0 0 300px; }
+.movie-info-content { flex: 1 1 0; min-width: 0; }
 .poster-main { border-radius: 15px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.5); }
 .radar-block { background: var(--card-bg); padding: 15px; border-radius: 12px; border: 1px solid var(--border); margin-top: 20px; }
 
