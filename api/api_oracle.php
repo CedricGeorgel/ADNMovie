@@ -389,7 +389,7 @@ function _oracle_fetch_season_tmdb(int $tmdbId, int $seasonNumber): array {
  * Centrage sur 5.0 (médiane TMDB) avec légère amplification.
  */
 function _oracle_vote_to_like_score(?float $voteAvg, int $voteCount): ?int {
-    if ($voteAvg === null || $voteAvg <= 0 || $voteCount < 2) return null;
+    if ($voteAvg === null || $voteAvg <= 0 || $voteCount < 1) return null;
     $raw   = ($voteAvg - 5.0) * 2.0;              // [0,10] → [−10,+10], centré sur 5
     $raw  += mt_rand(-5, 5) / 10.0;               // bruit ±0.5
     return (int)round(max(-10, min(10, $raw)));
