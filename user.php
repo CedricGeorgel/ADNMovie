@@ -569,16 +569,22 @@ if ($isOwnProfile && !empty($_SESSION['signal_perdu'])) {
 
                 <!-- ═══════════════ DÉCONNEXION ═══════════════ -->
                 <div class="user-logout-section" style="margin-top:60px;text-align:center;display:flex;flex-direction:column;gap:15px;align-items:center;">
-                    <?php if (has_role('admin')): ?>
-                        <a href="admin.php" class="btn-base" style="background:var(--pastel-blue);color:#050505;border-color:var(--pastel-blue);width:100%;max-width:300px;font-weight:900;">🛡️ Command Center</a>
+                    <?php if (has_role('admin') || has_role('moderator')): ?>
+                    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;width:100%;max-width:500px;">
+                        <?php if (has_role('admin')): ?>
+                            <a href="admin.php" class="btn-base" style="background:var(--pastel-blue);color:#050505;border-color:var(--pastel-blue);flex:1;font-weight:900;">🛡️ Command Center</a>
+                        <?php endif; ?>
+                        <?php if (has_role('moderator')): ?>
+                            <a href="moderation.php" class="btn-base" style="background:rgba(110,231,183,0.15);color:#6ee7b7;border-color:rgba(110,231,183,0.4);flex:1;font-weight:900;">🛡 Modération</a>
+                        <?php endif; ?>
+                    </div>
                     <?php endif; ?>
-                    <?php if (has_role('moderator')): ?>
-                        <a href="moderation.php" class="btn-base" style="background:rgba(110,231,183,0.15);color:#6ee7b7;border-color:rgba(110,231,183,0.4);width:100%;max-width:300px;font-weight:900;">🛡 Poste de Modération</a>
-                    <?php endif; ?>
-                    <a href="api/api_logout.php" class="btn-base btn-logout-final" style="width:100%;max-width:300px;">Déconnexion</a>
-                    <button onclick="confirmAnonymization()" style="background:none;border:none;color:var(--text-dim);font-size:0.7rem;text-decoration:underline;cursor:pointer;opacity:0.6;transition:opacity 0.2s;margin-top:10px;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'">
-                        Supprimer mon compte
-                    </button>
+                    <div style="display:flex;gap:10px;justify-content:center;align-items:center;width:100%;max-width:500px;">
+                        <a href="api/api_logout.php" class="btn-base btn-logout-final" style="flex:1;">Déconnexion</a>
+                        <button onclick="confirmAnonymization()" style="flex:1;background:none;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:var(--text-dim);font-size:0.7rem;cursor:pointer;opacity:0.6;transition:opacity 0.2s;padding:10px;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'">
+                            Supprimer mon compte
+                        </button>
+                    </div>
                 </div>
 
                 <!-- ═══════════════ MODALE ÉDITION PROFIL (onglets) ═══════════════ -->
