@@ -34,8 +34,27 @@ function initRadars() {
         const dataCommu = JSON.parse(canvas.dataset.commu  || '[]');
         const dataUser  = canvas.dataset.user && canvas.dataset.user !== 'null'
                           ? JSON.parse(canvas.dataset.user) : null;
+        const dataDna   = canvas.dataset.dna  && canvas.dataset.dna  !== 'null'
+                          ? JSON.parse(canvas.dataset.dna)  : null;
 
         const datasets = [];
+
+        if (dataDna) {
+            datasets.push({
+                label:                'Mon ADN',
+                data:                 dataDna,
+                originalData:         [...dataDna],
+                fill:                 false,
+                backgroundColor:      'transparent',
+                borderColor:          '#9dffb0',
+                borderWidth:          2.5,
+                borderDash:           [5, 3],
+                pointRadius:          4,
+                pointBackgroundColor: '#9dffb0',
+                pointBorderColor:     '#9dffb0',
+                pointHoverRadius:     5,
+            });
+        }
 
         if (dataCommu.length > 0) {
             const origDataCommu = [...dataCommu];
@@ -67,7 +86,7 @@ function initRadars() {
         }
 
         if (dataUser) {
-            const origDataUser = [...dataUser];
+            const origDataUser   = [...dataUser];
             const mappedDataUser = dataUser.map(v => v === null ? 0 : v);
 
             datasets.push({

@@ -30,30 +30,69 @@ foreach ($nowPlayingRows as $m) {
     ];
 }
 
-// ── POLARISATION ──────────────────────────────────────────────────────────────
+// ── POLARISATION (films + séries) ─────────────────────────────────────────────
 $agitating = db_fetch_all(
-    "SELECT DISTINCT m.tmdb_id AS id, m.title, m.poster, m.year, m.polarization_index
-     FROM movies m
-     INNER JOIN ratings r ON r.movie_id = m.tmdb_id
-     WHERE m.polarization_index > 2
-       AND m.total_votes >= 3
-       AND r.rated_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-     ORDER BY m.polarization_index DESC
+    "(SELECT DISTINCT m.tmdb_id AS id, m.title, m.poster, m.year, m.polarization_index, 'movie' AS content_type
+      FROM movies m
+      INNER JOIN ratings r ON r.movie_id = m.tmdb_id
+      WHERE m.polarization_index > 2
+        AND m.total_votes >= 3
+        AND r.rated_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+      ORDER BY m.polarization_index DESC LIMIT 12)
+     UNION ALL
+     (SELECT DISTINCT s.tmdb_id AS id, s.title, s.poster, s.year, s.polarization_index, 'tv' AS content_type
+      FROM series s
+      INNER JOIN series_ratings sr ON sr.series_id = s.id
+      WHERE s.polarization_index > 2
+        AND s.total_votes >= 3
+        AND sr.rated_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+      ORDER BY s.polarization_index DESC LIMIT 12)
+     ORDER BY polarization_index DESC
      LIMIT 12"
 );
 
-// ── ANGLES MORTS ──────────────────────────────────────────────────────────────
+// ── ANGLES MORTS (films + séries) ─────────────────────────────────────────────
 $blindSpots = db_fetch_all(
-    "SELECT m.tmdb_id AS id, m.title, m.poster, m.year, m.total_votes,
-            AVG(ABS(md.avg_score)) AS adn_strength
-     FROM movies m
-     JOIN movie_dna md ON md.movie_id = m.tmdb_id
-     WHERE m.total_votes < 5 AND m.total_votes > 0
-     GROUP BY m.tmdb_id
-     HAVING adn_strength > 4
+    "(SELECT m.tmdb_id AS id, m.title, m.poster, m.year, m.total_votes,
+             AVG(ABS(md.avg_score)) AS adn_strength, 'movie' AS content_type
+      FROM movies m
+      JOIN movie_dna md ON md.movie_id = m.tmdb_id
+      WHERE m.total_votes < 5 AND m.total_votes > 0
+      GROUP BY m.tmdb_id
+      HAVING adn_strength > 4)
+     UNION ALL
+     (SELECT s.tmdb_id AS id, s.title, s.poster, s.year, s.total_votes,
+             AVG(ABS(sd.avg_score)) AS adn_strength, 'tv' AS content_type
+      FROM series s
+      JOIN series_dna sd ON sd.series_id = s.id
+      WHERE s.total_votes < 5 AND s.total_votes > 0
+      GROUP BY s.tmdb_id
+      HAVING adn_strength > 4)
      ORDER BY adn_strength DESC
      LIMIT 12"
 );
+
+// ── ACTU SÉRIES (derniers épisodes sortis, toutes séries) ────────────────────
+$nowAiringRaw = db_fetch_all(
+    "SELECT s.tmdb_id AS id, s.title, s.poster, s.year,
+            se.air_date, se.season_number, se.episode_number
+     FROM series s
+     JOIN series_episodes se ON se.series_id = s.id
+     WHERE se.air_date BETWEEN DATE_SUB(CURDATE(), INTERVAL 14 DAY) AND CURDATE()
+       AND se.season_number > 0
+     ORDER BY se.air_date DESC, se.episode_number DESC
+     LIMIT 60"
+) ?: [];
+
+$nowAiringSeries = [];
+$seenSeriesIds   = [];
+foreach ($nowAiringRaw as $row) {
+    if (!isset($seenSeriesIds[$row['id']])) {
+        $seenSeriesIds[$row['id']] = true;
+        $nowAiringSeries[] = $row;
+        if (count($nowAiringSeries) >= 20) break;
+    }
+}
 
 // ── NOUVEAUX ÉPISODES (séries suivies par l'utilisateur) ─────────────────────
 $recentSeriesEpisodes = [];
@@ -73,16 +112,24 @@ if ($userId) {
     );
 }
 
-// ── CLASSIQUES ────────────────────────────────────────────────────────────────
+// ── CLASSIQUES (films + séries) ───────────────────────────────────────────────
 $classics = db_fetch_all(
-    "SELECT m.tmdb_id AS id, m.title, m.poster, m.year, m.total_votes,
-            AVG(ABS(md.avg_score)) AS adn_strength
-     FROM movies m
-     JOIN movie_dna md ON md.movie_id = m.tmdb_id
-     WHERE m.total_votes >= 5
-     GROUP BY m.tmdb_id
-     HAVING adn_strength > 5
-     ORDER BY m.total_votes DESC, adn_strength DESC
+    "(SELECT m.tmdb_id AS id, m.title, m.poster, m.year, m.total_votes,
+             AVG(ABS(md.avg_score)) AS adn_strength, 'movie' AS content_type
+      FROM movies m
+      JOIN movie_dna md ON md.movie_id = m.tmdb_id
+      WHERE m.total_votes >= 5
+      GROUP BY m.tmdb_id
+      HAVING adn_strength > 5)
+     UNION ALL
+     (SELECT s.tmdb_id AS id, s.title, s.poster, s.year, s.total_votes,
+             AVG(ABS(sd.avg_score)) AS adn_strength, 'tv' AS content_type
+      FROM series s
+      JOIN series_dna sd ON sd.series_id = s.id
+      WHERE s.total_votes >= 5
+      GROUP BY s.tmdb_id
+      HAVING adn_strength > 5)
+     ORDER BY total_votes DESC, adn_strength DESC
      LIMIT 12"
 );
 ?>
@@ -163,11 +210,33 @@ $classics = db_fetch_all(
                     <span class="h-section__count"><?= count($nowPlaying) ?> films</span>
                 </div>
                 <div class="h-scroll">
-                    <?php 
+                    <?php
                     foreach ($nowPlaying as $m) {
                         renderMovieCard($m, ['show_meta' => true, 'show_badges' => false]);
-                    } 
+                    }
                     ?>
+                </div>
+            </div>
+            <hr class="section-divider">
+            <?php endif; ?>
+
+            <?php if (!empty($nowAiringSeries)): ?>
+            <div class="h-section">
+                <div class="h-section__header">
+                    <span class="h-section__label">Actu séries</span>
+                    <span class="h-section__count">Nouveaux épisodes des 14 derniers jours</span>
+                </div>
+                <div class="h-scroll">
+                    <?php foreach ($nowAiringSeries as $s):
+                        $ep = 'S' . str_pad($s['season_number'], 2, '0', STR_PAD_LEFT)
+                            . 'E' . str_pad($s['episode_number'], 2, '0', STR_PAD_LEFT);
+                        renderMovieCard($s, [
+                            'show_meta'    => true,
+                            'show_badges'  => false,
+                            'content_type' => 'tv',
+                            'extra_label'  => '📺 ' . $ep,
+                        ]);
+                    endforeach; ?>
                 </div>
             </div>
             <hr class="section-divider">
@@ -183,9 +252,10 @@ $classics = db_fetch_all(
                             <div class="h-scroll">
                                 <?php foreach ($agitating as $m): ?>
                                     <?php renderMovieCard($m, [
-                                        'show_meta'   => true,
-                                        'show_badges' => false,
-                                        'extra_label' => '⚡ ' . round($m['polarization_index'], 1)
+                                        'show_meta'    => true,
+                                        'show_badges'  => false,
+                                        'content_type' => $m['content_type'] ?? 'movie',
+                                        'extra_label'  => '⚡ ' . round($m['polarization_index'], 1)
                                     ]); ?>
                                 <?php endforeach; ?>
                             </div>
@@ -203,11 +273,12 @@ $classics = db_fetch_all(
                     <?php 
                     foreach ($blindSpots as $m) {
                         renderMovieCard($m, [
-                            'show_meta' => true, 
-                            'show_badges' => false, 
-                            'extra_label' => '🔭 ' . $m['total_votes'] . ' vote' . ($m['total_votes'] > 1 ? 's' : '')
+                            'show_meta'    => true,
+                            'show_badges'  => false,
+                            'content_type' => $m['content_type'] ?? 'movie',
+                            'extra_label'  => '🔭 ' . $m['total_votes'] . ' vote' . ($m['total_votes'] > 1 ? 's' : ''),
                         ]);
-                    } 
+                    }
                     ?>
                 </div>
             </div>
@@ -223,8 +294,12 @@ $classics = db_fetch_all(
                 <div class="h-scroll">
                     <?php 
                     foreach ($classics as $m) {
-                        renderMovieCard($m, ['show_meta' => true, 'show_badges' => false]);
-                    } 
+                        renderMovieCard($m, [
+                            'show_meta'    => true,
+                            'show_badges'  => false,
+                            'content_type' => $m['content_type'] ?? 'movie',
+                        ]);
+                    }
                     ?>
                 </div>
             </div>
