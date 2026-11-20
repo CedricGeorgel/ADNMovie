@@ -117,6 +117,7 @@ function renderHeader($user = null) {
 </div>
         </div>
     </header>
+    <?php if (false): // SOCIAL — chat ?>
     <?php
     // Bulle de chat flottante
     if ($user) {
@@ -337,6 +338,9 @@ function renderHeader($user = null) {
         </script>
         <?php
     }
+    ?>
+    <?php endif; // SOCIAL — chat ?>
+    <?php
 
     $userId = $user['id'] ?? null;
     $banner = get_active_banner($userId ? (string)$userId : null);
