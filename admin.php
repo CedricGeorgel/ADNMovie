@@ -254,7 +254,7 @@ $userActivity = array_column($activityRows, 'cnt', 'user_id');
                     <div class="widget">
                         <div class="widget-title">Oracle — Sync appréciations TMDB</div>
                         <p style="font-size:0.75rem;color:var(--text-dim);margin-bottom:14px;">
-                            Recalcule le <code style="font-size:0.7rem;">like_score</code> Oracle sur tous les films depuis les votes TMDB (50&nbsp;%&nbsp;=&nbsp;0 chez nous).<br>
+                            Recalcule le <code style="font-size:0.7rem;">like_score</code> Oracle sur tous les films et séries depuis les votes TMDB (50&nbsp;%&nbsp;=&nbsp;0 chez nous).<br>
                             Ne touche <strong>pas</strong> aux scores ADN existants.
                         </p>
                         <div id="oracleSyncLog" style="display:none;font-size:0.72rem;font-family:monospace;padding:8px 10px;background:var(--card-bg);border:1px solid var(--border);border-radius:6px;margin-bottom:12px;"></div>
@@ -270,6 +270,37 @@ $userActivity = array_column($activityRows, 'cnt', 'user_id');
                                 🧹 Purger séries sans Oracle
                             </button>
                         </div>
+                    </div>
+
+                    <div class="widget">
+                        <div class="widget-title">Import Provider — Séries</div>
+                        <p style="font-size:0.75rem;color:var(--text-dim);margin-bottom:14px;">
+                            Importe toutes les séries d'un provider (région FR) depuis TMDB Discover.<br>
+                            Chaque série est upsertée + notée par Oracle + providers_data stocké.
+                        </p>
+                        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+                            <label style="font-size:0.72rem;color:var(--text-dim);align-self:center;">Provider :</label>
+                            <select id="importProviderSelect" style="flex:1;min-width:140px;background:var(--card-bg);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-size:0.8rem;">
+                                <option value="350">Apple TV+</option>
+                                <option value="8">Netflix</option>
+                                <option value="119">Prime Video</option>
+                                <option value="337">Disney+</option>
+                                <option value="190">Canal+</option>
+                            </select>
+                        </div>
+                        <div id="importProviderProgress" style="display:none;margin-bottom:10px;">
+                            <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:var(--text-dim);margin-bottom:4px;">
+                                <span id="importProviderStatus">—</span>
+                                <span id="importProviderCount">0 importées</span>
+                            </div>
+                            <div style="height:4px;background:rgba(255,255,255,0.08);border-radius:2px;overflow:hidden;">
+                                <div id="importProviderBar" style="height:100%;width:0%;background:#9dffb0;transition:width 0.4s;border-radius:2px;"></div>
+                            </div>
+                        </div>
+                        <div id="importProviderLog" style="display:none;font-size:0.7rem;font-family:monospace;padding:8px 10px;background:var(--card-bg);border:1px solid var(--border);border-radius:6px;margin-bottom:12px;max-height:80px;overflow-y:auto;"></div>
+                        <button id="btnImportProvider" class="btn-base active" style="width:100%;" onclick="runImportProviderSeries(this)">
+                            📡 Importer séries du provider
+                        </button>
                     </div>
 
                 </div>
@@ -554,40 +585,48 @@ $userActivity = array_column($activityRows, 'cnt', 'user_id');
         log.style.display = 'block';
         log.style.color = 'var(--text-dim)';
 
-        let offset = 0, totalUpdated = 0, totalSkipped = 0, totalErrors = 0, grandTotal = 0;
         let secs = 0;
         const timer = setInterval(() => { secs++; }, 1000);
 
-        try {
+        const runPhase = async (type, label) => {
+            let offset = 0, totalUpdated = 0, totalSkipped = 0, totalErrors = 0, grandTotal = 0;
             let done = false;
             while (!done) {
-                btn.textContent = `Oracle en cours… ${offset}/${grandTotal || '?'} (${secs}s)`;
-                log.textContent = `Batch en cours : films ${offset + 1}–${offset + 50}… (${secs}s)`;
+                btn.textContent = `Oracle ${label}… ${offset}/${grandTotal || '?'} (${secs}s)`;
+                log.textContent = `${label} — batch ${offset + 1}–${offset + 50}…`;
 
-                const body = new URLSearchParams({ offset, limit: 50 });
+                const body = new URLSearchParams({ type, offset, limit: 50 });
                 const res  = await fetch('api/api_admin_oracle_likes.php', { method: 'POST', body });
-
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const data = await res.json();
                 if (!data.success) throw new Error(data.error || 'Erreur serveur');
 
                 totalUpdated += data.updated;
                 totalSkipped += data.skipped;
-                totalErrors  += data.errors;
+                totalErrors  += data.errors ?? 0;
                 grandTotal    = data.total;
                 offset        = data.offset;
                 done          = data.done;
             }
+            return { totalUpdated, totalSkipped, totalErrors, grandTotal };
+        };
+
+        try {
+            const films   = await runPhase('movie',  'Films');
+            const series  = await runPhase('series', 'Séries');
             clearInterval(timer);
             log.style.color = '#9dffb0';
-            log.innerHTML = `✓ ${totalUpdated} mis à jour &middot; ${totalSkipped} ignorés (&lt; 5 votes) &middot; ${totalErrors} erreurs &middot; ${grandTotal} films &middot; ${secs}s`;
+            log.innerHTML =
+                `✓ Films : ${films.totalUpdated} màj · ${films.totalSkipped} ignorés · ${films.grandTotal} total<br>` +
+                `✓ Séries : ${series.totalUpdated} màj · ${series.totalSkipped} ignorés · ${series.grandTotal} total<br>` +
+                `Durée : ${secs}s`;
         } catch (e) {
             clearInterval(timer);
             log.style.color = '#f87171';
-            log.textContent = `✗ ${e.message} (après ${offset} films traités)`;
+            log.textContent = `✗ ${e.message}`;
         }
         btn.disabled = false;
-        btn.textContent = '⚡ Relancer Oracle';
+        btn.textContent = '⚡ Lancer Oracle (toute la base)';
     }
 
     async function runTmdbImport(type, btn) {
@@ -789,6 +828,64 @@ $userActivity = array_column($activityRows, 'cnt', 'user_id');
             document.getElementById('deleteSearchInput').value    = '';
             document.getElementById('deleteSelected').style.display = 'none';
         }
+    }
+
+    async function runImportProviderSeries(btn) {
+        const providerId = document.getElementById('importProviderSelect').value;
+        const providerName = document.getElementById('importProviderSelect').selectedOptions[0].text;
+        const progress = document.getElementById('importProviderProgress');
+        const bar      = document.getElementById('importProviderBar');
+        const status   = document.getElementById('importProviderStatus');
+        const count    = document.getElementById('importProviderCount');
+        const log      = document.getElementById('importProviderLog');
+
+        btn.disabled   = true;
+        btn.textContent = '⏳ Import en cours…';
+        progress.style.display = 'block';
+        log.style.display = 'block';
+        log.textContent  = '';
+
+        let page = 1, totalPages = 1, totalImported = 0;
+
+        while (page <= totalPages) {
+            status.textContent = `${providerName} — page ${page} / ${totalPages}`;
+            bar.style.width    = Math.round((page / totalPages) * 100) + '%';
+
+            try {
+                const res  = await fetch('api/api_admin_import_provider_series.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ provider_id: parseInt(providerId), page }),
+                });
+                const json = await res.json();
+
+                if (!json.ok) {
+                    log.textContent += `\n[ERR p${page}] ${json.error || 'erreur inconnue'}`;
+                    break;
+                }
+
+                totalPages     = json.total_pages;
+                totalImported += json.imported;
+                count.textContent = `${totalImported} importées`;
+
+                if (json.series && json.series.length) {
+                    log.textContent += json.series.join(', ') + '\n';
+                    log.scrollTop = log.scrollHeight;
+                }
+            } catch (e) {
+                log.textContent += `\n[ERR p${page}] ${e.message}`;
+                break;
+            }
+
+            page++;
+            // Petite pause côté client (le serveur fait déjà 250ms/série)
+            await new Promise(r => setTimeout(r, 300));
+        }
+
+        bar.style.width = '100%';
+        status.textContent = `✓ Import terminé — ${totalImported} séries`;
+        btn.disabled   = false;
+        btn.textContent = '📡 Importer séries du provider';
     }
 
     async function runPurgeSeriesNoOracle() {

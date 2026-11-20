@@ -1,11 +1,13 @@
 <?php
 /**
  * SHOOT.PHP — LE film et LA série à regarder ce soir depuis tes abonnements.
- * Score = moyenne communautaire des like_score, sur les contenus non encore vus.
+ * Série : meilleur match ADN utilisateur ↔ série disponible sur abonnements.
+ * Film  : meilleur score communautaire disponible sur abonnements.
  */
 require_once 'config/settings.php';
 require_once 'functions/utils.php';
 require_once 'functions/auth.php';
+require_once 'functions/ratings_logic.php';
 require_once 'components/header.php';
 require_once 'components/nav.php';
 require_once 'components/footer.php';
@@ -15,6 +17,26 @@ check_auth();
 $userId = $_SESSION['user_id'];
 $user   = get_user_by_id($userId);
 
+// ── Skip : on ajoute l'id rejeté en session, reset possible ──────────────────
+$skipKey = 'shoot_skip_' . $userId;
+if (isset($_GET['reset_skip'])) {
+    $_SESSION[$skipKey] = [];
+}
+if (isset($_GET['skip_series'])) {
+    $_SESSION[$skipKey]['series'] = array_merge(
+        $_SESSION[$skipKey]['series'] ?? [],
+        [(int)$_GET['skip_series']]
+    );
+}
+if (isset($_GET['skip_movie'])) {
+    $_SESSION[$skipKey]['movies'] = array_merge(
+        $_SESSION[$skipKey]['movies'] ?? [],
+        [(int)$_GET['skip_movie']]
+    );
+}
+$skippedSeriesTmdbIds = $_SESSION[$skipKey]['series'] ?? [];
+$skippedMovieTmdbIds  = $_SESSION[$skipKey]['movies'] ?? [];
+
 $subscribedIds = array_map('intval', json_decode($user['user_platforms'] ?? '[]', true) ?: []);
 $hasPlatforms  = !empty($subscribedIds);
 
@@ -23,6 +45,7 @@ $seenMovieIds = array_column(
     db_fetch_all("SELECT movie_id FROM ratings WHERE user_id = ? AND user_id != 'IA-ORACLE-001'", [$userId]),
     'movie_id'
 ) ?: [0];
+$seenMovieIds = array_values(array_unique(array_merge($seenMovieIds, $skippedMovieTmdbIds))) ?: [0];
 
 // ── Séries déjà vues (hors Oracle) ───────────────────────────────────────────
 $seenSeriesIds = array_column(
@@ -73,62 +96,136 @@ if (!empty($platformMovieIds)) {
     }
 }
 
-// ── Série : meilleur score communautaire, filtrée par abonnements si dispo ────
+// ── ADN utilisateur (série → fallback film) ───────────────────────────────────
+$userDnaRows = db_fetch_all(
+    'SELECT criterio, avg_score FROM user_series_dna WHERE user_id = ?', [$userId]
+);
+if (empty($userDnaRows)) {
+    $userDnaRows = db_fetch_all(
+        'SELECT criterio, avg_score FROM user_dna WHERE user_id = ?', [$userId]
+    );
+}
+$userDnaMap = array_column($userDnaRows, 'avg_score', 'criterio');
+$hasUserDna = count($userDnaMap) >= 4;
+
+// ── Séries disponibles sur abonnements ────────────────────────────────────────
 $topSeries      = null;
 $topSeriesScore = null;
+$topSeriesMode  = 'dna'; // 'dna' | 'community'
 
-$seenIn = implode(',', $seenSeriesIds);
+// Convertir les tmdb_ids skippés en ids locaux
+$skippedSeriesLocalIds = [];
+if (!empty($skippedSeriesTmdbIds)) {
+    $inPH = implode(',', array_fill(0, count($skippedSeriesTmdbIds), '?'));
+    $skippedSeriesLocalIds = array_column(
+        db_fetch_all("SELECT id FROM series WHERE tmdb_id IN ($inPH)", $skippedSeriesTmdbIds),
+        'id'
+    );
+}
+$allExcludedSeriesLocalIds = array_values(array_unique(array_merge($seenSeriesIds, $skippedSeriesLocalIds))) ?: [0];
+$seenIn = implode(',', $allExcludedSeriesLocalIds);
 
-// Filtrage par plateforme si providers_data existe sur la table series
-$platformSeriesIds = null;
+$platformSeriesLocalIds = null; // ids locaux (series.id)
 if ($hasPlatforms) {
     $allSeriesWithProviders = db_fetch_all(
-        'SELECT tmdb_id, providers_data FROM series WHERE providers_data IS NOT NULL AND providers_data != "[]"'
+        'SELECT id, tmdb_id, providers_data FROM series WHERE providers_data IS NOT NULL AND providers_data != "[]"'
     );
     if (!empty($allSeriesWithProviders)) {
-        $platformSeriesIds = [];
+        $platformSeriesLocalIds = [];
         foreach ($allSeriesWithProviders as $s) {
             $data    = json_decode($s['providers_data'], true) ?: [];
             $flatIds = array_column($data['flatrate'] ?? [], 'provider_id');
             if (array_intersect($subscribedIds, $flatIds)) {
-                $platformSeriesIds[] = (int)$s['tmdb_id'];
+                $platformSeriesLocalIds[] = (int)$s['id'];
             }
         }
     }
 }
 
-$seriesWhereExtra = '';
-$seriesParams     = [];
-if ($platformSeriesIds !== null) {
-    if (empty($platformSeriesIds)) {
+$providerFilter = '';
+$providerParams = [];
+if ($platformSeriesLocalIds !== null) {
+    if (empty($platformSeriesLocalIds)) {
+        // Aucune série sur les abonnements → rien à afficher
         $topSeries = null;
-    } else {
-        $inPH = implode(',', array_fill(0, count($platformSeriesIds), '?'));
-        $seriesWhereExtra = "AND s.tmdb_id IN ($inPH)";
-        $seriesParams     = $platformSeriesIds;
+        goto shoot_series_done;
+    }
+    $inPH = implode(',', array_fill(0, count($platformSeriesLocalIds), '?'));
+    $providerFilter = "AND s.id IN ($inPH)";
+    $providerParams = $platformSeriesLocalIds;
+}
+
+// ── Mode ADN : meilleur match utilisateur ↔ série ────────────────────────────
+if ($hasUserDna) {
+    // Candidats : séries non vues avec au moins 4 dimensions ADN renseignées
+    $candidates = db_fetch_all(
+        "SELECT s.id, s.tmdb_id AS tmdb_id, s.title, s.poster, s.year, s.total_votes
+         FROM series s
+         WHERE s.id NOT IN ($seenIn)
+           $providerFilter
+           AND EXISTS (SELECT 1 FROM series_dna sd WHERE sd.series_id = s.id)",
+        $providerParams
+    );
+
+    if (!empty($candidates)) {
+        $candidateIds = array_column($candidates, 'id');
+        $idPH = implode(',', array_fill(0, count($candidateIds), '?'));
+        $dnaRows = db_fetch_all(
+            "SELECT series_id, criterio, avg_score FROM series_dna WHERE series_id IN ($idPH)",
+            $candidateIds
+        );
+
+        $dnaBySeries = [];
+        foreach ($dnaRows as $row) {
+            $dnaBySeries[(int)$row['series_id']][$row['criterio']] = (float)$row['avg_score'];
+        }
+
+        $bestMatch  = -1;
+        $bestSeries = null;
+        foreach ($candidates as $s) {
+            $sid       = (int)$s['id'];
+            $seriesDna = $dnaBySeries[$sid] ?? [];
+            if (count($seriesDna) < 4) continue;
+            $match = compute_dna_match($userDnaMap, $seriesDna);
+            if ($match['global'] > $bestMatch) {
+                $bestMatch  = $match['global'];
+                $bestSeries = $s;
+            }
+        }
+
+        if ($bestSeries) {
+            $topSeries      = $bestSeries;
+            $topSeries['id'] = (int)$bestSeries['tmdb_id'];
+            $topSeriesScore = $bestMatch;
+            $topSeriesMode  = 'dna';
+        }
     }
 }
 
-if ($platformSeriesIds === null || !empty($platformSeriesIds)) {
-    $topSeriesRow = db_fetch_one(
-        "SELECT s.tmdb_id AS id, s.title, s.poster, s.year, s.total_votes,
+// ── Fallback : meilleur score communautaire ───────────────────────────────────
+if (!$topSeries) {
+    $topSeriesMode = 'community';
+    $topSeriesRow  = db_fetch_one(
+        "SELECT s.tmdb_id AS id, s.tmdb_id, s.title, s.poster, s.year, s.total_votes,
                 ROUND(AVG(sr.like_score), 1) AS community_score,
                 COUNT(sr.like_score)         AS vote_count
          FROM series s
          JOIN series_ratings sr ON sr.series_id = s.id AND sr.like_score IS NOT NULL
          WHERE s.id NOT IN ($seenIn)
-           $seriesWhereExtra
+           $providerFilter
          GROUP BY s.id
          HAVING vote_count >= 1
          ORDER BY community_score DESC, vote_count DESC
          LIMIT 1",
-        $seriesParams
+        $providerParams
     );
     if ($topSeriesRow) {
         $topSeries      = $topSeriesRow;
         $topSeriesScore = (float)$topSeriesRow['community_score'];
     }
 }
+
+shoot_series_done:
 
 function formatCommunityScore(float $score): string {
     $sign = $score >= 0 ? '+' : '';
@@ -228,6 +325,19 @@ function formatCommunityScore(float $score): string {
             text-decoration: underline;
         }
 
+        .shoot-skip-btn {
+            display: block;
+            text-align: center;
+            font-size: 0.72rem;
+            color: var(--text-dim);
+            text-decoration: none;
+            margin-top: 8px;
+            padding: 6px;
+            border-radius: 6px;
+            transition: color 0.15s;
+        }
+        .shoot-skip-btn:hover { color: var(--text); }
+
         @media (max-width: 540px) {
             .shoot-grid {
                 grid-template-columns: 1fr 1fr;
@@ -247,7 +357,7 @@ function formatCommunityScore(float $score): string {
 
         <section class="shoot-hero">
             <h1>SHOOT</h1>
-            <p>Le film et la série avec le score le plus haut — que tu n'as pas encore vus.</p>
+            <p>Le meilleur match ADN parmi les séries de tes abonnements et que tu n'as pas encore vus.</p>
         </section>
 
         <?php if (!$hasPlatforms): ?>
@@ -275,6 +385,7 @@ function formatCommunityScore(float $score): string {
                             'content_type' => 'movie',
                             'extra_label'  => formatCommunityScore($topMovieScore),
                         ]); ?>
+                        <a href="?skip_movie=<?= (int)$topMovie['id'] ?>" class="shoot-skip-btn">Pas ce soir →</a>
                     <?php else: ?>
                         <p class="shoot-empty">Aucun film trouvé sur tes abonnements.</p>
                     <?php endif; ?>
@@ -284,12 +395,20 @@ function formatCommunityScore(float $score): string {
                 <div class="shoot-slot">
                     <span class="shoot-slot-label">Série</span>
                     <?php if ($topSeries): ?>
-                        <div class="shoot-score"><?= h(formatCommunityScore($topSeriesScore)) ?></div>
-                        <div class="shoot-score-label">score communauté</div>
+                        <?php if ($topSeriesMode === 'dna'): ?>
+                            <div class="shoot-score" style="color:#9dffb0;"><?= (int)$topSeriesScore ?>%</div>
+                            <div class="shoot-score-label">match ADN</div>
+                        <?php else: ?>
+                            <div class="shoot-score"><?= h(formatCommunityScore($topSeriesScore)) ?></div>
+                            <div class="shoot-score-label">score communauté</div>
+                        <?php endif; ?>
                         <?php renderMovieCard($topSeries, [
                             'content_type' => 'tv',
-                            'extra_label'  => formatCommunityScore($topSeriesScore),
+                            'extra_label'  => $topSeriesMode === 'dna'
+                                ? ((int)$topSeriesScore . '% match ADN')
+                                : formatCommunityScore($topSeriesScore),
                         ]); ?>
+                        <a href="?skip_series=<?= (int)$topSeries['tmdb_id'] ?>" class="shoot-skip-btn">Pas ce soir →</a>
                     <?php else: ?>
                         <p class="shoot-empty">Aucune série trouvée.</p>
                     <?php endif; ?>

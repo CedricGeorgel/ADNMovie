@@ -18,12 +18,12 @@ $seriesAdn = get_user_series_adn($userId) ?: [];
 
 $filmVotes   = (int)($adn['count']       ?? 0);
 $seriesVotes = (int)($seriesAdn['count'] ?? 0);
-$minRequired = 10;
+$minRequired = 5;
 $showRecos   = ($filmVotes >= $minRequired || $seriesVotes >= $minRequired);
 
 // Résolution de la source ADN pour chaque type
-// Films : ADN film si >= 10, sinon fallback sur ADN série
-// Séries : ADN série si >= 10, sinon fallback sur ADN film
+// Films : ADN film si >= 5, sinon fallback sur ADN série
+// Séries : ADN série si >= 5, sinon fallback sur ADN film
 $filmDnaSource   = ($filmVotes   >= $minRequired) ? 'film'   : 'series';
 $seriesDnaSource = ($seriesVotes >= $minRequired) ? 'series' : 'film';
 
