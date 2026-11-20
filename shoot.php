@@ -53,37 +53,99 @@ $seenSeriesIds = array_column(
     'series_id'
 ) ?: [0];
 
-// ── Film : meilleur score communautaire disponible sur abonnements ─────────────
-$topMovie   = null;
-$topMovieScore = null;
+// ── ADN utilisateur films ─────────────────────────────────────────────────────
+$userMovieDnaRows = db_fetch_all(
+    'SELECT criterio, avg_score FROM user_dna WHERE user_id = ?', [$userId]
+);
+$userMovieDnaMap = array_column($userMovieDnaRows, 'avg_score', 'criterio');
+$hasUserMovieDna = count($userMovieDnaMap) >= 4;
 
+// ── ADN utilisateur séries (fallback film si pas d'ADN série propre) ──────────
+$userDnaRows = db_fetch_all(
+    'SELECT criterio, avg_score FROM user_series_dna WHERE user_id = ?', [$userId]
+);
+if (empty($userDnaRows)) {
+    $userDnaRows = $userMovieDnaRows;
+}
+$userDnaMap = array_column($userDnaRows, 'avg_score', 'criterio');
+$hasUserDna = count($userDnaMap) >= 4;
+
+// ── Films disponibles sur abonnements ─────────────────────────────────────────
+$topMovie      = null;
+$topMovieScore = null;
+$topMovieMode  = 'dna'; // 'dna' | 'community'
+
+$platformMovieIds = [];
 if ($hasPlatforms) {
-    // Récupérer les tmdb_id disponibles sur les abos de l'utilisateur
     $allMoviesWithProviders = db_fetch_all(
         'SELECT tmdb_id, providers_data FROM movies WHERE providers_data IS NOT NULL AND providers_data != "[]"'
     );
-    $platformMovieIds = [];
     foreach ($allMoviesWithProviders as $m) {
-        $data     = json_decode($m['providers_data'], true) ?: [];
-        $flatIds  = array_column($data['flatrate'] ?? [], 'provider_id');
+        $data    = json_decode($m['providers_data'], true) ?: [];
+        $flatIds = array_column($data['flatrate'] ?? [], 'provider_id');
         if (array_intersect($subscribedIds, $flatIds)) {
             $platformMovieIds[] = (int)$m['tmdb_id'];
         }
     }
     $platformMovieIds = array_values(array_diff($platformMovieIds, $seenMovieIds));
-} else {
-    $platformMovieIds = [];
 }
 
-if (!empty($platformMovieIds)) {
-    $inPlaceholders = implode(',', array_fill(0, count($platformMovieIds), '?'));
+// ── Mode ADN films ────────────────────────────────────────────────────────────
+if ($hasUserMovieDna && !empty($platformMovieIds)) {
+    $inPH = implode(',', array_fill(0, count($platformMovieIds), '?'));
+    $movieCandidates = db_fetch_all(
+        "SELECT m.tmdb_id AS id, m.title, m.poster, m.year, m.total_votes
+         FROM movies m
+         WHERE m.tmdb_id IN ($inPH)
+           AND EXISTS (SELECT 1 FROM movie_dna md WHERE md.movie_id = m.tmdb_id)",
+        $platformMovieIds
+    );
+
+    if (!empty($movieCandidates)) {
+        $candidateMovieIds = array_column($movieCandidates, 'id');
+        $idPH = implode(',', array_fill(0, count($candidateMovieIds), '?'));
+        $movieDnaRows = db_fetch_all(
+            "SELECT movie_id, criterio, avg_score FROM movie_dna WHERE movie_id IN ($idPH)",
+            $candidateMovieIds
+        );
+
+        $dnaByMovie = [];
+        foreach ($movieDnaRows as $row) {
+            $dnaByMovie[(int)$row['movie_id']][$row['criterio']] = (float)$row['avg_score'];
+        }
+
+        $bestMatch = -1;
+        $bestMovie = null;
+        foreach ($movieCandidates as $m) {
+            $mid      = (int)$m['id'];
+            $movieDna = $dnaByMovie[$mid] ?? [];
+            if (count($movieDna) < 4) continue;
+            $match = compute_dna_match($userMovieDnaMap, $movieDna);
+            if ($match['global'] > $bestMatch) {
+                $bestMatch = $match['global'];
+                $bestMovie = $m;
+            }
+        }
+
+        if ($bestMovie) {
+            $topMovie      = $bestMovie;
+            $topMovieScore = $bestMatch;
+            $topMovieMode  = 'dna';
+        }
+    }
+}
+
+// ── Fallback : meilleur score communautaire films ─────────────────────────────
+if (!$topMovie && !empty($platformMovieIds)) {
+    $topMovieMode = 'community';
+    $inPH = implode(',', array_fill(0, count($platformMovieIds), '?'));
     $topMovieRow = db_fetch_one(
         "SELECT m.tmdb_id AS id, m.title, m.poster, m.year, m.total_votes,
                 ROUND(AVG(r.like_score), 1) AS community_score,
                 COUNT(r.like_score)         AS vote_count
          FROM movies m
          JOIN ratings r ON r.movie_id = m.tmdb_id AND r.like_score IS NOT NULL
-         WHERE m.tmdb_id IN ($inPlaceholders)
+         WHERE m.tmdb_id IN ($inPH)
          GROUP BY m.tmdb_id
          HAVING vote_count >= 1
          ORDER BY community_score DESC, vote_count DESC
@@ -95,18 +157,6 @@ if (!empty($platformMovieIds)) {
         $topMovieScore = (float)$topMovieRow['community_score'];
     }
 }
-
-// ── ADN utilisateur (série → fallback film) ───────────────────────────────────
-$userDnaRows = db_fetch_all(
-    'SELECT criterio, avg_score FROM user_series_dna WHERE user_id = ?', [$userId]
-);
-if (empty($userDnaRows)) {
-    $userDnaRows = db_fetch_all(
-        'SELECT criterio, avg_score FROM user_dna WHERE user_id = ?', [$userId]
-    );
-}
-$userDnaMap = array_column($userDnaRows, 'avg_score', 'criterio');
-$hasUserDna = count($userDnaMap) >= 4;
 
 // ── Séries disponibles sur abonnements ────────────────────────────────────────
 $topSeries      = null;
@@ -379,11 +429,18 @@ function formatCommunityScore(float $score): string {
                 <div class="shoot-slot">
                     <span class="shoot-slot-label">Film</span>
                     <?php if ($topMovie): ?>
-                        <div class="shoot-score"><?= h(formatCommunityScore($topMovieScore)) ?></div>
-                        <div class="shoot-score-label">score communauté</div>
+                        <?php if ($topMovieMode === 'dna'): ?>
+                            <div class="shoot-score" style="color:#9dffb0;"><?= (int)$topMovieScore ?>%</div>
+                            <div class="shoot-score-label">match ADN</div>
+                        <?php else: ?>
+                            <div class="shoot-score"><?= h(formatCommunityScore($topMovieScore)) ?></div>
+                            <div class="shoot-score-label">score communauté</div>
+                        <?php endif; ?>
                         <?php renderMovieCard($topMovie, [
                             'content_type' => 'movie',
-                            'extra_label'  => formatCommunityScore($topMovieScore),
+                            'extra_label'  => $topMovieMode === 'dna'
+                                ? ((int)$topMovieScore . '% match ADN')
+                                : formatCommunityScore($topMovieScore),
                         ]); ?>
                         <a href="?skip_movie=<?= (int)$topMovie['id'] ?>" class="shoot-skip-btn">Pas ce soir →</a>
                     <?php else: ?>
