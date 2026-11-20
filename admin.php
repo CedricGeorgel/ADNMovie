@@ -310,6 +310,37 @@ $userActivity = array_column($activityRows, 'cnt', 'user_id');
                         </button>
                     </div>
 
+                    <div class="widget">
+                        <div class="widget-title">Import Provider — Films</div>
+                        <p style="font-size:0.75rem;color:var(--text-dim);margin-bottom:14px;">
+                            Importe tous les films d'un provider (région FR) depuis TMDB Discover.<br>
+                            Chaque film est upsert + noté par Oracle + providers_data stocké.
+                        </p>
+                        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+                            <label style="font-size:0.72rem;color:var(--text-dim);align-self:center;">Provider :</label>
+                            <select id="importMovieProviderSelect" style="flex:1;min-width:140px;background:var(--card-bg);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-size:0.8rem;">
+                                <option value="350">Apple TV+</option>
+                                <option value="8">Netflix</option>
+                                <option value="119">Prime Video</option>
+                                <option value="337">Disney+</option>
+                                <option value="190">Canal+</option>
+                            </select>
+                        </div>
+                        <div id="importMovieProviderProgress" style="display:none;margin-bottom:10px;">
+                            <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:var(--text-dim);margin-bottom:4px;">
+                                <span id="importMovieProviderStatus">—</span>
+                                <span id="importMovieProviderCount">0 importés</span>
+                            </div>
+                            <div style="height:4px;background:rgba(255,255,255,0.08);border-radius:2px;overflow:hidden;">
+                                <div id="importMovieProviderBar" style="height:100%;width:0%;background:#9dffb0;transition:width 0.4s;border-radius:2px;"></div>
+                            </div>
+                        </div>
+                        <div id="importMovieProviderLog" style="display:none;font-size:0.7rem;font-family:monospace;padding:8px 10px;background:var(--card-bg);border:1px solid var(--border);border-radius:6px;margin-bottom:12px;max-height:80px;overflow-y:auto;"></div>
+                        <button id="btnImportMovieProvider" class="btn-base active" style="width:100%;" onclick="runImportProviderMovies(this)">
+                            🎬 Importer films du provider
+                        </button>
+                    </div>
+
                 </div>
             </div>
 
@@ -887,6 +918,63 @@ $userActivity = array_column($activityRows, 'cnt', 'user_id');
         status.textContent = `✓ Import terminé — ${totalImported} séries`;
         btn.disabled   = false;
         btn.textContent = '📡 Importer séries du provider';
+    }
+
+    async function runImportProviderMovies(btn) {
+        const providerId   = document.getElementById('importMovieProviderSelect').value;
+        const providerName = document.getElementById('importMovieProviderSelect').selectedOptions[0].text;
+        const progress = document.getElementById('importMovieProviderProgress');
+        const bar      = document.getElementById('importMovieProviderBar');
+        const status   = document.getElementById('importMovieProviderStatus');
+        const count    = document.getElementById('importMovieProviderCount');
+        const log      = document.getElementById('importMovieProviderLog');
+
+        btn.disabled    = true;
+        btn.textContent = '⏳ Import en cours…';
+        progress.style.display = 'block';
+        log.style.display = 'block';
+        log.textContent  = '';
+
+        let page = 1, totalPages = 1, totalImported = 0;
+
+        while (page <= totalPages) {
+            status.textContent = `${providerName} — page ${page} / ${totalPages}`;
+            bar.style.width    = Math.round((page / totalPages) * 100) + '%';
+
+            try {
+                const res  = await fetch('api/api_admin_import_provider_movies.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ provider_id: parseInt(providerId), page }),
+                });
+                const json = await res.json();
+
+                if (!json.ok) {
+                    log.textContent += `\n[ERR p${page}] ${json.error || 'erreur inconnue'}`;
+                    break;
+                }
+
+                totalPages     = json.total_pages;
+                totalImported += json.imported;
+                count.textContent = `${totalImported} importés`;
+
+                if (json.movies && json.movies.length) {
+                    log.textContent += json.movies.join(', ') + '\n';
+                    log.scrollTop = log.scrollHeight;
+                }
+            } catch (e) {
+                log.textContent += `\n[ERR p${page}] ${e.message}`;
+                break;
+            }
+
+            page++;
+            await new Promise(r => setTimeout(r, 300));
+        }
+
+        bar.style.width = '100%';
+        status.textContent = `✓ Import terminé — ${totalImported} films`;
+        btn.disabled    = false;
+        btn.textContent = '🎬 Importer films du provider';
     }
 
     async function runPurgeSeriesNoOracle() {
