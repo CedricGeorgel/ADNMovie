@@ -111,6 +111,22 @@ try {
     error_log("Failed to create user_series_follow table: " . $e->getMessage());
 }
 
+// Création de la table series_dna si elle n'existe pas
+try {
+    getPDO()->exec("
+        CREATE TABLE IF NOT EXISTS series_dna (
+            series_id    INT          NOT NULL,
+            criterio     VARCHAR(50)  NOT NULL,
+            avg_score    FLOAT        DEFAULT 0,
+            variance     FLOAT        DEFAULT 0,
+            sample_size  INT          DEFAULT 0,
+            PRIMARY KEY (series_id, criterio)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+} catch (Throwable $e) {
+    error_log("Failed to create series_dna table: " . $e->getMessage());
+}
+
 // Création de la table series_episodes si elle n'existe pas
 try {
     getPDO()->exec("
