@@ -72,26 +72,22 @@ $blindSpots = db_fetch_all(
      LIMIT 12"
 );
 
-// ── ACTU SÉRIES (derniers épisodes sortis, toutes séries) ────────────────────
-$nowAiringRaw = db_fetch_all(
-    "SELECT s.tmdb_id AS id, s.title, s.poster, s.year,
-            se.air_date, se.season_number, se.episode_number
-     FROM series s
-     JOIN series_episodes se ON se.series_id = s.id
-     WHERE se.air_date BETWEEN DATE_SUB(CURDATE(), INTERVAL 14 DAY) AND CURDATE()
-       AND se.season_number > 0
-     ORDER BY se.air_date DESC, se.episode_number DESC
+// ── ACTU SÉRIES (via table series_now_airing alimentée par le CRON) ──────────
+$nowAiringRows = db_fetch_all(
+    "SELECT tmdb_id AS id, title, poster_path, first_air_date
+     FROM series_now_airing
+     ORDER BY first_air_date DESC
      LIMIT 60"
 ) ?: [];
 
 $nowAiringSeries = [];
-$seenSeriesIds   = [];
-foreach ($nowAiringRaw as $row) {
-    if (!isset($seenSeriesIds[$row['id']])) {
-        $seenSeriesIds[$row['id']] = true;
-        $nowAiringSeries[] = $row;
-        if (count($nowAiringSeries) >= 20) break;
-    }
+foreach ($nowAiringRows as $s) {
+    $nowAiringSeries[] = [
+        'id'     => $s['id'],
+        'title'  => $s['title'],
+        'poster' => $s['poster_path'] ? 'https://image.tmdb.org/t/p/w300' . $s['poster_path'] : null,
+        'year'   => $s['first_air_date'] ? substr($s['first_air_date'], 0, 4) : '',
+    ];
 }
 
 // ── NOUVEAUX ÉPISODES (séries suivies par l'utilisateur) ─────────────────────
@@ -228,13 +224,11 @@ $classics = db_fetch_all(
                 </div>
                 <div class="h-scroll">
                     <?php foreach ($nowAiringSeries as $s):
-                        $ep = 'S' . str_pad($s['season_number'], 2, '0', STR_PAD_LEFT)
-                            . 'E' . str_pad($s['episode_number'], 2, '0', STR_PAD_LEFT);
                         renderMovieCard($s, [
                             'show_meta'    => true,
                             'show_badges'  => false,
                             'content_type' => 'tv',
-                            'extra_label'  => '📺 ' . $ep,
+                            'extra_label'  => '📺 ' . ($s['year'] ?: ''),
                         ]);
                     endforeach; ?>
                 </div>

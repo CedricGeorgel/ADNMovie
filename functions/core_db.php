@@ -111,6 +111,22 @@ try {
     error_log("Failed to create user_series_follow table: " . $e->getMessage());
 }
 
+// Création de la table series_now_airing si elle n'existe pas
+try {
+    getPDO()->exec("
+        CREATE TABLE IF NOT EXISTS series_now_airing (
+            tmdb_id        INT          NOT NULL,
+            title          VARCHAR(500) NOT NULL,
+            poster_path    VARCHAR(500) NULL DEFAULT NULL,
+            first_air_date DATE         NULL DEFAULT NULL,
+            overview       TEXT         NULL DEFAULT NULL,
+            PRIMARY KEY (tmdb_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+} catch (Throwable $e) {
+    error_log("Failed to create series_now_airing table: " . $e->getMessage());
+}
+
 // Création de la table series_dna si elle n'existe pas
 try {
     getPDO()->exec("

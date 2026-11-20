@@ -604,6 +604,69 @@ try {
 }
 
 
+// ── TÂCHE 12 : Séries en cours de diffusion (TMDB on_the_air) ───────────────
+echo "-> Lancement Tâche 12 : Actu séries TMDB...\n";
+flush();
+try {
+    if (!defined('TMDB_API_KEY') || empty(TMDB_API_KEY)) {
+        throw new Exception("Clé TMDB_API_KEY manquante.");
+    }
+
+    $uniqueSeries = [];
+    for ($page = 1; $page <= 3; $page++) {
+        $apiUrl = "https://api.themoviedb.org/3/tv/on_the_air?api_key=" . TMDB_API_KEY . "&language=fr-FR&page=" . $page;
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL            => $apiUrl,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 10,
+            CURLOPT_USERAGENT      => 'ADNmovie-App/1.0'
+        ]);
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($httpCode !== 200 || !$response) {
+            echo "[Avertissement] TMDB on_the_air : échec page $page (HTTP $httpCode).\n";
+            break;
+        }
+        $data = json_decode($response, true);
+        if (empty($data['results'])) break;
+        foreach ($data['results'] as $s) {
+            $uniqueSeries[$s['id']] = $s;
+        }
+        usleep(250000);
+    }
+
+    if (!empty($uniqueSeries)) {
+        db_begin();
+        db_execute("DELETE FROM series_now_airing");
+        $sql = "INSERT IGNORE INTO series_now_airing (tmdb_id, title, poster_path, first_air_date, overview) VALUES (?, ?, ?, ?, ?)";
+        $insertedCount = 0;
+        foreach ($uniqueSeries as $s) {
+            db_execute($sql, [
+                $s['id'],
+                $s['name'] ?? $s['original_name'] ?? '',
+                $s['poster_path'] ?? null,
+                empty($s['first_air_date']) ? null : $s['first_air_date'],
+                $s['overview'] ?? null,
+            ]);
+            $insertedCount++;
+        }
+        db_commit();
+        $report['tasks']['series_now_airing_inserted'] = $insertedCount;
+        echo "[OK] Actu séries terminée ($insertedCount séries insérées).\n\n";
+    } else {
+        $report['tasks']['series_now_airing_inserted'] = 0;
+        echo "[ERREUR] TMDB on_the_air : aucun résultat.\n\n";
+    }
+} catch (Exception $e) {
+    if (function_exists('db_is_in_transaction') && db_is_in_transaction()) db_rollback();
+    $report['errors'][] = "Tâche 12 : " . $e->getMessage();
+    echo "[ERREUR] Tâche 12 : " . $e->getMessage() . "\n\n";
+}
+
+
 // ── ÉCRITURE DU LOG JSON ─────────────────────────────────────────────────────
 try {
     $logPath = __DIR__ . '/cron_status.json';
