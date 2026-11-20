@@ -39,6 +39,23 @@ function initRadars() {
 
         const datasets = [];
 
+        if (dataDna) {
+            datasets.push({
+                label:                'Mon ADN',
+                data:                 dataDna,
+                originalData:         [...dataDna],
+                fill:                 false,
+                backgroundColor:      'transparent',
+                borderColor:          '#9dffb0',
+                borderWidth:          2.5,
+                borderDash:           [5, 3],
+                pointRadius:          4,
+                pointBackgroundColor: '#9dffb0',
+                pointBorderColor:     '#9dffb0',
+                pointHoverRadius:     5,
+            });
+        }
+
         if (dataCommu.length > 0) {
             const origDataCommu = [...dataCommu];
             // Si la donnée est nulle, on la map à 0 pour assurer le tracé géométrique au centre
@@ -84,22 +101,6 @@ function initRadars() {
                 pointRadius:          4,
                 pointBackgroundColor: RADAR_COLORS.user,
                 pointBorderColor:     RADAR_COLORS.user,
-            });
-        }
-
-        if (dataDna) {
-            datasets.push({
-                label:                'Mon ADN',
-                data:                 dataDna,
-                originalData:         [...dataDna],
-                fill:                 true,
-                backgroundColor:      'rgba(157,255,176,0.07)',
-                borderColor:          '#9dffb0',
-                borderWidth:          1.5,
-                borderDash:           [3, 4],
-                pointRadius:          3,
-                pointBackgroundColor: '#9dffb0',
-                pointBorderColor:     '#9dffb0',
             });
         }
 
