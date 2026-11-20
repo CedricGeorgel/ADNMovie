@@ -8,6 +8,7 @@ require_once 'config/settings.php';
 require_once 'functions/utils.php';
 require_once 'functions/auth.php';
 require_once 'functions/ratings_logic.php';
+require_once 'functions/recommendation_logic.php';
 require_once 'components/header.php';
 require_once 'components/nav.php';
 require_once 'components/footer.php';
