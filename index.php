@@ -43,7 +43,7 @@ $isMobile = preg_match('/iPhone|iPad|iPod|Android/i', $ua);
                     <h1>L'ALGORITHME QUI RESSENT.</h1>
                     <p class="manifesto-text">
                         Marre des algorithmes qui vous proposent des comédies parce que vous avez regardé un dessin animé ? Nous aussi.<br><br>
-                        Séquence ADN ne s'intéresse pas aux étiquettes, mais à ce que vous ressentez vraiment. Nous décodons l'âme, l'ADN de chaque film : son rythme, sa folie, sa beauté brute. On ne vous propose pas ce que vous devriez aimer, mais ce qui va vous faire vibrer.
+                        ADNmovie ne s'intéresse pas aux étiquettes, mais à ce que vous ressentez vraiment. Nous décodons l'âme, l'ADN de chaque film : son rythme, sa folie, sa beauté brute. On ne vous propose pas ce que vous devriez aimer, mais ce qui va vous faire vibrer.
                     </p>
                     <div class="hero-actions">
                         <a href="home.php" class="btn-base active">EXPLORER LA BIBLIOTHÈQUE</a>
