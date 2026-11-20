@@ -34,6 +34,8 @@ function initRadars() {
         const dataCommu = JSON.parse(canvas.dataset.commu  || '[]');
         const dataUser  = canvas.dataset.user && canvas.dataset.user !== 'null'
                           ? JSON.parse(canvas.dataset.user) : null;
+        const dataDna   = canvas.dataset.dna  && canvas.dataset.dna  !== 'null'
+                          ? JSON.parse(canvas.dataset.dna)  : null;
 
         const datasets = [];
 
@@ -67,7 +69,7 @@ function initRadars() {
         }
 
         if (dataUser) {
-            const origDataUser = [...dataUser];
+            const origDataUser   = [...dataUser];
             const mappedDataUser = dataUser.map(v => v === null ? 0 : v);
 
             datasets.push({
@@ -82,6 +84,22 @@ function initRadars() {
                 pointRadius:          4,
                 pointBackgroundColor: RADAR_COLORS.user,
                 pointBorderColor:     RADAR_COLORS.user,
+            });
+        }
+
+        if (dataDna) {
+            datasets.push({
+                label:                'Mon ADN',
+                data:                 dataDna,
+                originalData:         [...dataDna],
+                fill:                 true,
+                backgroundColor:      'rgba(157,255,176,0.07)',
+                borderColor:          '#9dffb0',
+                borderWidth:          1.5,
+                borderDash:           [3, 4],
+                pointRadius:          3,
+                pointBackgroundColor: '#9dffb0',
+                pointBorderColor:     '#9dffb0',
             });
         }
 

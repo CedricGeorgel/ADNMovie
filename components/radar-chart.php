@@ -4,7 +4,7 @@
  * Supporte deux modes : 'radar' (spider recentré) et 'sliders' (curseurs bipolaires)
  * Plage : -10 à +10, neutre à 0
  */
-function renderRadarChart($data_commu, $data_user = null, $polarization = 0, $id = 'movieChart', $showBadge = false, $voteCount = 0) {
+function renderRadarChart($data_commu, $data_user = null, $polarization = 0, $id = 'movieChart', $showBadge = false, $voteCount = 0, $data_dna = null) {
     // V2 : 8 critères
     $criteria     = ['Complexité', 'Prévisibilité', 'Intensité', 'Malaise', 'Stylisation', 'Dynamique', 'Dépaysement', 'Cohérence'];
     $labels_left  = ['Récit évident', 'Imprévisible', 'Détaché', 'Réconfortant', 'Brut / naturaliste', 'Lent & dispersé', 'Aucun ailleurs', 'Totalement irréel'];
@@ -14,6 +14,7 @@ function renderRadarChart($data_commu, $data_user = null, $polarization = 0, $id
     // ... le reste de la fonction reste inchangé
     $commu_json  = json_encode(array_values($data_commu));
     $user_json   = $data_user ? json_encode(array_values($data_user)) : 'null';
+    $dna_json    = $data_dna  ? json_encode(array_values($data_dna))  : 'null';
 
     $has_data = !empty(array_filter($data_commu, fn($v) => $v != 0));
     ?>
@@ -41,7 +42,8 @@ function renderRadarChart($data_commu, $data_user = null, $polarization = 0, $id
                     class="radar-canvas"
                     data-labels='<?= $labels_json ?>'
                     data-commu='<?= $commu_json ?>'
-                    data-user='<?= $user_json ?>'>
+                    data-user='<?= $user_json ?>'
+                    data-dna='<?= $dna_json ?>'>
             </canvas>
             <button onclick="exportRadarToJPG('<?= h($id) ?>')" class="btn-export-chart" title="Exporter en image">
                 📸
@@ -59,6 +61,9 @@ function renderRadarChart($data_commu, $data_user = null, $polarization = 0, $id
                     // Plage -10/+10 → pourcentage pour left: X%. 50 si null.
                     $commu_pct = $commu_val !== null ? (($commu_val + 10) / 20) * 100 : 50;
                     $user_pct  = $user_val !== null ? (($user_val + 10) / 20) * 100 : null;
+                    $dna_raw   = $data_dna ? ($data_dna[$i] ?? null) : null;
+                    $dna_val   = $dna_raw !== null ? (float)$dna_raw : null;
+                    $dna_pct   = $dna_val !== null ? (($dna_val + 10) / 20) * 100 : null;
                 ?>
                 <div class="bipolar-row" title="<?= h($label) ?>">
                     <div class="bipolar-labels">
@@ -78,6 +83,11 @@ function renderRadarChart($data_commu, $data_user = null, $polarization = 0, $id
                                  style="left: <?= round($user_pct, 2) ?>%;"
                                  title="Mon analyse : <?= ($user_val >= 0 ? '+' : '') . $user_val ?>"></div>
                             <?php endif; ?>
+                            <?php if ($dna_pct !== null): ?>
+                            <div class="bipolar-dot"
+                                 style="left: <?= round($dna_pct, 2) ?>%;background:#9dffb0;box-shadow:0 0 6px #9dffb088;width:8px;height:8px;"
+                                 title="Mon ADN : <?= ($dna_val >= 0 ? '+' : '') . $dna_val ?>"></div>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
@@ -93,6 +103,12 @@ function renderRadarChart($data_commu, $data_user = null, $polarization = 0, $id
                 <span class="bipolar-legend-item">
                     <span class="bipolar-legend-dot bipolar-legend-dot--user"></span>
                     Mon analyse
+                </span>
+                <?php endif; ?>
+                <?php if ($data_dna): ?>
+                <span class="bipolar-legend-item">
+                    <span class="bipolar-legend-dot" style="background:#9dffb0;box-shadow:0 0 5px #9dffb066;"></span>
+                    Mon ADN
                 </span>
                 <?php endif; ?>
                 <span class="bipolar-legend-item bipolar-legend-item--neutral">
