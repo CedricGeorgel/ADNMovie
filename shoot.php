@@ -53,21 +53,15 @@ $seenSeriesIds = array_column(
     'series_id'
 ) ?: [0];
 
-// ── ADN utilisateur films ─────────────────────────────────────────────────────
-$userMovieDnaRows = db_fetch_all(
-    'SELECT criterio, avg_score FROM user_dna WHERE user_id = ?', [$userId]
-);
-$userMovieDnaMap = array_column($userMovieDnaRows, 'avg_score', 'criterio');
-$hasUserMovieDna = count($userMovieDnaMap) >= 4;
+// ── ADN utilisateur films (avec variance — algorithme Gaussien V3) ───────────
+$userMovieDna    = buildDnaFromTable($userId, 'user_dna'); // [criterio => [avg,var,min,max]]
+$hasUserMovieDna = count($userMovieDna) >= 4;
 
-// ── ADN utilisateur séries (fallback film si pas d'ADN série propre) ──────────
-$userDnaRows = db_fetch_all(
-    'SELECT criterio, avg_score FROM user_series_dna WHERE user_id = ?', [$userId]
-);
-if (empty($userDnaRows)) {
-    $userDnaRows = $userMovieDnaRows;
-}
-$userDnaMap = array_column($userDnaRows, 'avg_score', 'criterio');
+// ── ADN utilisateur séries (fallback sur ADN films si rien) ──────────────────
+$userSeriesDna = buildDnaFromTable($userId, 'user_series_dna');
+if (empty($userSeriesDna)) $userSeriesDna = $userMovieDna;
+// Pour la compatibilité avec le bloc séries (avg seulement)
+$userDnaMap = array_map(fn($d) => $d['avg'], $userSeriesDna);
 $hasUserDna = count($userDnaMap) >= 4;
 
 // ── Films disponibles sur abonnements ─────────────────────────────────────────
@@ -90,48 +84,57 @@ if ($hasPlatforms) {
     $platformMovieIds = array_values(array_diff($platformMovieIds, $seenMovieIds));
 }
 
-// ── Mode ADN films ────────────────────────────────────────────────────────────
+// ── Mode Gaussien films (algorithme recos V3) ─────────────────────────────────
 if ($hasUserMovieDna && !empty($platformMovieIds)) {
+    $userProfile   = db_fetch_one('SELECT exploration_rate FROM users WHERE id = ?', [$userId]);
+    $epsilon       = (float)($userProfile['exploration_rate'] ?? 0.15);
+
     $inPH = implode(',', array_fill(0, count($platformMovieIds), '?'));
-    $movieCandidates = db_fetch_all(
-        "SELECT m.tmdb_id AS id, m.title, m.poster, m.year, m.total_votes
+    $movieDnaRows = db_fetch_all(
+        "SELECT m.tmdb_id AS id, m.title, m.poster, m.year, m.polarization_index,
+                md.criterio, md.avg_score, md.sample_size
          FROM movies m
-         WHERE m.tmdb_id IN ($inPH)
-           AND EXISTS (SELECT 1 FROM movie_dna md WHERE md.movie_id = m.tmdb_id)",
+         JOIN movie_dna md ON md.movie_id = m.tmdb_id
+         WHERE m.tmdb_id IN ($inPH) AND m.total_votes > 0",
         $platformMovieIds
     );
 
-    if (!empty($movieCandidates)) {
-        $candidateMovieIds = array_column($movieCandidates, 'id');
-        $idPH = implode(',', array_fill(0, count($candidateMovieIds), '?'));
-        $movieDnaRows = db_fetch_all(
-            "SELECT movie_id, criterio, avg_score FROM movie_dna WHERE movie_id IN ($idPH)",
-            $candidateMovieIds
-        );
-
-        $dnaByMovie = [];
-        foreach ($movieDnaRows as $row) {
-            $dnaByMovie[(int)$row['movie_id']][$row['criterio']] = (float)$row['avg_score'];
+    $films = [];
+    foreach ($movieDnaRows as $row) {
+        $mid = (int)$row['id'];
+        if (!isset($films[$mid])) {
+            $films[$mid] = [
+                'id'          => $mid,
+                'title'       => $row['title'],
+                'poster'      => $row['poster'],
+                'year'        => $row['year'],
+                'polarization'=> (float)$row['polarization_index'],
+                'dna'         => [],
+            ];
         }
+        $films[$mid]['dna'][$row['criterio']] = [
+            'avg'         => (float)$row['avg_score'],
+            'sample_size' => (int)$row['sample_size'],
+        ];
+    }
 
-        $bestMatch = -1;
-        $bestMovie = null;
-        foreach ($movieCandidates as $m) {
-            $mid      = (int)$m['id'];
-            $movieDna = $dnaByMovie[$mid] ?? [];
-            if (count($movieDna) < 4) continue;
-            $match = compute_dna_match($userMovieDnaMap, $movieDna);
-            if ($match['global'] > $bestMatch) {
-                $bestMatch = $match['global'];
-                $bestMovie = $m;
-            }
+    $bestScore = -1.0;
+    $bestMovie = null;
+    foreach ($films as $film) {
+        if (count($film['dna']) < 4) continue;
+        $result    = calculateSimilarityWithReasons($userMovieDna, $film['dna']);
+        $polarNorm = min(1.0, $film['polarization'] / 20.0);
+        $score     = $result['score'] * (1.0 - $polarNorm * (1.0 - $epsilon));
+        if ($score > $bestScore) {
+            $bestScore = $score;
+            $bestMovie = $film;
         }
+    }
 
-        if ($bestMovie) {
-            $topMovie      = $bestMovie;
-            $topMovieScore = $bestMatch;
-            $topMovieMode  = 'dna';
-        }
+    if ($bestMovie) {
+        $topMovie      = $bestMovie;
+        $topMovieScore = (int)round($bestScore * 100); // converti en %
+        $topMovieMode  = 'dna';
     }
 }
 
@@ -205,11 +208,17 @@ if ($platformSeriesLocalIds !== null) {
     $providerParams = $platformSeriesLocalIds;
 }
 
-// ── Mode ADN : meilleur match utilisateur ↔ série ────────────────────────────
+// ── Mode Gaussien séries (algorithme recos V3) ───────────────────────────────
 if ($hasUserDna) {
-    // Candidats : séries non vues avec au moins 4 dimensions ADN renseignées
+    if (!isset($userProfile)) {
+        $userProfile = db_fetch_one('SELECT exploration_rate FROM users WHERE id = ?', [$userId]);
+    }
+    $epsilonSeries = (float)($userProfile['exploration_rate'] ?? 0.15);
+
+    // Candidats : séries non vues avec ADN + polarisation
     $candidates = db_fetch_all(
-        "SELECT s.id, s.tmdb_id AS tmdb_id, s.title, s.poster, s.year, s.total_votes
+        "SELECT s.id, s.tmdb_id, s.title, s.poster, s.year, s.total_votes,
+                COALESCE(s.polarization_index, 0) AS polarization_index
          FROM series s
          WHERE s.id NOT IN ($seenIn)
            $providerFilter
@@ -221,33 +230,38 @@ if ($hasUserDna) {
         $candidateIds = array_column($candidates, 'id');
         $idPH = implode(',', array_fill(0, count($candidateIds), '?'));
         $dnaRows = db_fetch_all(
-            "SELECT series_id, criterio, avg_score FROM series_dna WHERE series_id IN ($idPH)",
+            "SELECT series_id, criterio, avg_score, sample_size FROM series_dna WHERE series_id IN ($idPH)",
             $candidateIds
         );
 
         $dnaBySeries = [];
         foreach ($dnaRows as $row) {
-            $dnaBySeries[(int)$row['series_id']][$row['criterio']] = (float)$row['avg_score'];
+            $dnaBySeries[(int)$row['series_id']][$row['criterio']] = [
+                'avg'         => (float)$row['avg_score'],
+                'sample_size' => (int)$row['sample_size'],
+            ];
         }
 
-        $bestMatch  = -1;
+        $bestScore  = -1.0;
         $bestSeries = null;
         foreach ($candidates as $s) {
-            $sid       = (int)$s['id'];
+            $sid      = (int)$s['id'];
             $seriesDna = $dnaBySeries[$sid] ?? [];
             if (count($seriesDna) < 4) continue;
-            $match = compute_dna_match($userDnaMap, $seriesDna);
-            if ($match['global'] > $bestMatch) {
-                $bestMatch  = $match['global'];
+            $result    = calculateSimilarityWithReasons($userSeriesDna, $seriesDna);
+            $polarNorm = min(1.0, (float)$s['polarization_index'] / 20.0);
+            $score     = $result['score'] * (1.0 - $polarNorm * (1.0 - $epsilonSeries));
+            if ($score > $bestScore) {
+                $bestScore  = $score;
                 $bestSeries = $s;
             }
         }
 
         if ($bestSeries) {
-            $topSeries      = $bestSeries;
-            $topSeries['id'] = (int)$bestSeries['tmdb_id'];
-            $topSeriesScore = $bestMatch;
-            $topSeriesMode  = 'dna';
+            $topSeries           = $bestSeries;
+            $topSeries['id']     = (int)$bestSeries['tmdb_id'];
+            $topSeriesScore      = (int)round($bestScore * 100); // converti en %
+            $topSeriesMode       = 'dna';
         }
     }
 }
