@@ -39,7 +39,7 @@ $isMobile = preg_match('/iPhone|iPad|iPod|Android/i', $ua);
         <main class="landing-layout" style="position: relative;">
             <section class="hero-manifesto" style="position: relative; z-index: 1;">
                 <div class="hero-content">
-                    <span class="tagline">PROJET : SÉQUENCE ADN</span>
+                    <span class="tagline">PROJET : ADNmovie</span>
                     <h1>L'ALGORITHME QUI RESSENT.</h1>
                     <p class="manifesto-text">
                         Marre des algorithmes qui vous proposent des comédies parce que vous avez regardé un dessin animé ? Nous aussi.<br><br>
