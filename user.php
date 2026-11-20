@@ -526,7 +526,6 @@ if ($isOwnProfile && !empty($_SESSION['signal_perdu'])) {
             </div>
             <?php endif; ?>
 
-            <?php if (false): // SOCIAL — archives opérateur ?>
             <!-- ═══════════════ ARCHIVES ═══════════════ -->
             <section class="user-collection-preview" style="margin-top:40px;">
                 <div class="dash-card-header"><h4>ARCHIVES OPÉRATEUR</h4></div>
@@ -536,7 +535,6 @@ if ($isOwnProfile && !empty($_SESSION['signal_perdu'])) {
                     <a href="collection.php?filter=wishlist" class="dash-link-item" style="background:rgba(232,192,122,0.05);border-color:rgba(232,192,122,0.2);">🔖 Watchlist</a>
                 </div>
             </section>
-            <?php endif; ?>
 
             <?php if (false): // SOCIAL — créations ?>
             <!-- ═══════════════ CRÉATIONS ═══════════════ -->

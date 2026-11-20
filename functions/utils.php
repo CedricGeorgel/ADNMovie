@@ -119,8 +119,12 @@ function get_movie_smart(int $tmdbId): ?array {
         ]
     );
 
-    // 5. Oracle — seulement sur un film vraiment nouveau
-    if ($isNewMovie) {
+    // 5. Oracle — si pas encore de note Oracle sur ce film
+    $hasOracle = db_fetch_one(
+        "SELECT 1 FROM ratings WHERE movie_id = ? AND user_id = 'IA-ORACLE-001'",
+        [$tmdbId]
+    );
+    if (!$hasOracle) {
         $genreNames = array_map(
             fn($g) => is_array($g) ? ($g['name'] ?? '') : $g,
             $tmdb['genres'] ?? []
