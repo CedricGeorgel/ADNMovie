@@ -160,19 +160,24 @@ function renderWatchProviders(int $tmdbId, string $title = '', array $userPlatfo
 
     $providers = _filter_providers($providers ?? []);
 
-    if (empty($providers) || (!isset($providers['flatrate']) && !isset($providers['buy']))) {
+    $hasProviders = !empty($providers['flatrate']) || !empty($providers['buy']);
+    $isAdmin      = function_exists('has_role') && has_role('admin');
+
+    if (!$hasProviders && !$isAdmin) {
         echo '<p class="no-providers">Non disponible en streaming actuellement.</p>';
         return;
     }
 
     // YouTube ID
-    $youtubeId  = 'NONE';
-    $allIds     = array_map(fn($p) => (int)$p['provider_id'],
+    $youtubeId = 'NONE';
+    if ($hasProviders) {
+        $allIds = array_map(fn($p) => (int)$p['provider_id'],
                     array_merge($providers['flatrate'] ?? [], $providers['buy'] ?? []));
-    if (!empty(array_intersect($allIds, [188, 192]))) {
-        $youtubeId = ($row['youtube_id'] !== null)
-            ? $row['youtube_id']
-            : _fetch_and_cache_youtube_id($tmdbId, $title, $year, 'movies');
+        if (!empty(array_intersect($allIds, [188, 192]))) {
+            $youtubeId = ($row['youtube_id'] !== null)
+                ? $row['youtube_id']
+                : _fetch_and_cache_youtube_id($tmdbId, $title, $year, 'movies');
+        }
     }
 
     // URL JustWatch spécifique au film
@@ -187,6 +192,10 @@ function renderWatchProviders(int $tmdbId, string $title = '', array $userPlatfo
     ?>
     <div class="watch-providers">
         <h3>OÙ REGARDER ?</h3>
+
+        <?php if (!$hasProviders): ?>
+            <p class="no-providers" style="margin-bottom:0;">Non disponible en streaming actuellement.</p>
+        <?php endif; ?>
 
         <?php if (!empty($providers['flatrate'])): ?>
             <div class="provider-section">
@@ -210,9 +219,22 @@ function renderWatchProviders(int $tmdbId, string $title = '', array $userPlatfo
             </div>
         <?php endif; ?>
 
+        <?php if ($isAdmin): ?>
+            <div class="provider-section" style="margin-top:10px;">
+                <span class="provider-type" style="opacity:0.4;">Admin</span>
+                <div class="provider-logos">
+                    <button id="btn-play-imdb" onclick="window.playImdb(<?= $tmdbId ?>)" style="background:none; border:1px solid rgba(255,255,255,0.15); color:rgba(255,255,255,0.45); font-size:0.6rem; cursor:pointer; text-transform:uppercase; letter-spacing:1px; padding:7px 12px; border-radius:8px; white-space:nowrap;">
+                        ▶ IMDb Player
+                    </button>
+                </div>
+            </div>
+        <?php endif; ?>
+
+        <?php if ($hasProviders): ?>
         <div class="justwatch-attribution">
             <small>Données fournies par JustWatch via TMDB</small>
         </div>
+        <?php endif; ?>
     </div>
     <?php
 }
