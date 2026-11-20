@@ -124,6 +124,12 @@ if ($isOwnProfile && !empty($_SESSION['signal_perdu'])) {
                     <span style="color:var(--text-dim); font-size:0.7em;">Membre depuis le <?= $accountCreationDate ?></span>
 
                     <div class="user-stats-bar">
+                        <span class="user-stat-item<?= $isOwnProfile ? ' clickable' : '' ?>"
+                              data-label="Liens"
+                              <?= $isOwnProfile ? 'onclick="document.getElementById(\'friendsModal\').classList.remove(\'hidden\')"' : '' ?>>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 442.666 442.666" fill="var(--pastel-blue)"><path d="M230.729,340.323l-144.152.197c-17.95-2.755-28.38-18.263-27.346-36.097,2.218-38.222,37.067-63.929,72.938-69.017,13.023-1.847,25.897-1.753,39.237-.833,17.537,1.21,34.179,6.851,48.808,16.164,23.742,15.115,39.794,41.588,32.385,70.207-2.485,9.596-10.552,19.364-21.871,19.379Z"/><path d="M354.568,340.065l-98.807.414c18.12-16.761,23.5-41.348,14.311-63.848-5.57-13.641-16.308-23.722-29.598-30.832,14.227-9.213,29.571-11.529,45.726-11.845,24.431-.479,47.839,5.535,67.345,20.118,16.658,11.867,27.815,28.852,29.795,49.459,1.672,17.397-9.561,36.454-28.772,36.535Z"/><path d="M164.994,206.594c-16.752,2.38-31.876-2.644-43.452-13.322-11.083-10.223-17.061-25.615-16.286-41.597,1.511-31.175,29.16-53.339,60.275-48.983,19.691,2.756,36.954,16.293,42.974,35.659,9.593,30.864-11.087,63.636-43.511,68.243Z"/><path d="M293.792,206.539c-17.415,2.601-32.769-3.172-44.451-15.113-13.432-13.731-18.711-32.959-12.944-52.477,4.679-15.835,18.063-30.036,36.166-34.918,26.335-7.101,54.837,7.106,63.833,33.329,10.599,30.894-9.995,64.307-42.604,69.178Z"/></svg>
+                            <span class="user-stat-value"><?= (int)$profileStats['friend_count'] ?></span>
+                        </span>
                         <span class="user-stat-item" data-label="Analyses">
                             <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 442.666 442.666" fill="var(--pastel-blue)"><path d="M317.824,349.076c-.036,8.913-10.045,13.285-17.107,12.355-7.826-1.031-13.332-7.491-13.436-15.933l-.156-12.755-131.125.031c-.041,5.983.038,10.66-.254,15.529-.515,8.601-8.337,13.621-16.075,13.243-7.807-.382-14.84-6.93-14.877-15.693l-.189-43.711c1.092-21.715,11.026-41.877,29.184-54.096l40.732-27.41c-15.605-10.057-30.84-19.049-44.867-30.271-15.651-12.52-24.392-30.487-24.895-50.22-.375-14.716-.327-28.8.039-43.444.218-8.703,7.066-15.11,15.003-15.573,8.201-.479,15.955,5.73,16.083,14.695l.241,16.938,131.017-.003.134-16.956c.067-8.522,7.55-14.545,15.356-14.665,7.703-.118,15.173,6.053,15.267,14.624.17,15.528.564,30.385-.133,46.031-.898,20.163-11.913,37.899-27.978,49.641-13.96,10.203-27.738,18.812-43.036,28.756l41.132,27.357c17.306,11.511,27.928,29.312,30.147,49.95l-.209,51.581ZM263.627,166.574c14.335-.051,24.014-12.728,23.764-25.83l-131.396-.052c-.99,15.051,10.299,26.225,25.15,26.173l82.482-.291ZM232.2,196.984l-23.629-.44,12.594,8.002,11.035-7.562ZM237.343,248.401l-17.489-10.856-16.037,10.769,33.526.087ZM287.611,302.942c.387-12.633-6.807-23.299-18.767-26.324l-91.676.224c-13.691.034-22.296,13.544-21.442,26.108l131.885-.008Z"/></svg>
                             <span class="user-stat-value"><?= (int)$profileStats['rating_count'] ?></span>
@@ -482,7 +488,49 @@ if ($isOwnProfile && !empty($_SESSION['signal_perdu'])) {
                 </script>
             </section>
 
+            <!-- ═══════════════ AGENDA & SESSIONS ═══════════════ -->
+            <div class="user-dashboard-split">
+                <div class="dash-column dash-agenda">
+                    <div class="dash-card-header"><h4>PLANIFICATION</h4></div>
+                    <div class="agenda-list">
+                        <?php if (empty($userEvents)): ?>
+                            <div class="empty-placeholder"><p>Aucun événement planifié.</p></div>
+                        <?php else: ?>
+                            <?php foreach ($userEvents as $event):
+                                renderEventCard($event, $_SESSION['user_id']);
+                            endforeach; ?>
+                        <?php endif; ?>
+                    </div>
+                </div>
 
+                <div class="dash-column dash-sessions">
+                    <div class="dash-card-header" style="display:flex;justify-content:space-between;align-items:center;">
+                        <h4>SESSIONS ACTIVES</h4>
+                        <a href="rooms.php" class="view-all" style="font-size:0.7rem;color:var(--pastel-blue);font-weight:bold;">Ouvrir</a>
+                    </div>
+                    <div class="rooms-grid-mini" style="margin-top:15px;">
+                        <?php if (empty($myActiveRooms)): ?>
+                            <div class="empty-placeholder"><p>Aucune session active.</p></div>
+                        <?php else: ?>
+                            <?php foreach ($myActiveRooms as $room):
+                                $host = $allUsers[$room['host_id']] ?? null;
+                                $room['host_name'] = $host ? $host['username'] : 'Inconnu';
+                                renderRoomCard($room);
+                            endforeach; ?>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══════════════ ARCHIVES ═══════════════ -->
+            <section class="user-collection-preview" style="margin-top:40px;">
+                <div class="dash-card-header"><h4>ARCHIVES OPÉRATEUR</h4></div>
+                <div class="dash-links" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:15px;margin-top:15px;">
+                    <a href="collection.php?filter=liked"    class="dash-link-item" style="background:rgba(255,77,77,0.05);border-color:rgba(255,77,77,0.2);">❤️ Coup de coeur</a>
+                    <a href="collection.php?filter=seen"     class="dash-link-item" style="background:rgba(167,199,231,0.05);border-color:rgba(167,199,231,0.2);">✓ Historique</a>
+                    <a href="collection.php?filter=wishlist" class="dash-link-item" style="background:rgba(232,192,122,0.05);border-color:rgba(232,192,122,0.2);">🔖 Watchlist</a>
+                </div>
+            </section>
 
             <!-- ═══════════════ CRÉATIONS ═══════════════ -->
             <section style="margin-top:30px;">
@@ -679,6 +727,49 @@ if ($isOwnProfile && !empty($_SESSION['signal_perdu'])) {
     <div class="flex-spacer"></div>
     <?php renderFooter(); ?>
 
+    <!-- ═══════════════ MODAL AMIS ═══════════════ -->
+    <?php if ($isOwnProfile): ?>
+    <div id="friendsModal" class="friends-modal-overlay hidden" onclick="if(event.target===this)this.classList.add('hidden')">
+        <div class="friends-modal">
+            <div class="friends-modal-header">
+                <span class="friends-modal-title">Mes liens (<?= count($friendsList) ?>)</span>
+                <button onclick="document.getElementById('friendsModal').classList.add('hidden')"
+                        style="background:none;border:none;color:var(--text-dim);font-size:1.2rem;cursor:pointer;padding:0;line-height:1;">&times;</button>
+            </div>
+            <?php if (empty($friendsList)): ?>
+                <p style="font-size:0.78rem;color:var(--text-dim);text-align:center;padding:20px 0;">Aucun lien tissé pour l'instant.</p>
+            <?php else: ?>
+                <?php foreach ($friendsList as $f): ?>
+                <div class="friend-row">
+                    <img src="<?= h($f['avatar'] ?: 'assets/default-avatar.png') ?>"
+                         onerror="this.src='assets/default-avatar.png'"
+                         class="friend-row-avatar">
+                    <a href="adn.php?id=<?= urlencode($f['id']) ?>" class="friend-row-name"><?= h($f['username']) ?></a>
+                    <div class="friend-row-actions">
+                        <a href="chat.php?with=<?= urlencode($f['id']) ?>"
+                           class="btn-base" style="font-size:0.58rem;padding:5px 9px;text-decoration:none;">Message</a>
+                        <button onclick="removeFriend('<?= addslashes($f['id']) ?>', this)"
+                                class="btn-base" style="font-size:0.58rem;padding:5px 9px;color:var(--text-dim);">Retirer</button>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </div>
+    </div>
+    <script>
+    async function removeFriend(targetId, btn) {
+        if (!confirm('Retirer ce lien ?')) return;
+        btn.disabled = true;
+        const fd = new FormData();
+        fd.append('action', 'remove');
+        fd.append('target_id', targetId);
+        const res  = await fetch('api/api_friends.php', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (data.ok) btn.closest('.friend-row').remove();
+        else btn.disabled = false;
+    }
+    </script>
+    <?php endif; ?>
 
     <script>
     let _userPlatforms = <?= json_encode(
