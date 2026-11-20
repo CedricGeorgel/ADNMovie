@@ -466,6 +466,28 @@ $canonicalUrl  = 'https://adnmovie.fr/fiche.php?id=' . $tmdbId
 
                 <?php renderCommentSection('M-' . $movieId, $currentUser, $userId); ?>
 
+                <?php
+                $refMovieDna = array_column(
+                    db_fetch_all('SELECT criterio, avg_score FROM movie_dna WHERE movie_id = ?', [$movieId]),
+                    'avg_score', 'criterio'
+                );
+                $similarContent = get_similar_content_by_dna($refMovieDna, $movieId, 0, 12);
+                if (!empty($similarContent)):
+                ?>
+                <div style="margin-top:50px;">
+                    <h3 style="font-size:0.8rem; letter-spacing:2px; color:var(--text-dim); margin-bottom:16px;">DANS LE MÊME GENRE</h3>
+                    <div class="h-scroll">
+                        <?php foreach ($similarContent as $item):
+                            renderMovieCard($item, [
+                                'show_meta'    => true,
+                                'show_badges'  => false,
+                                'content_type' => $item['content_type'],
+                            ]);
+                        endforeach; ?>
+                    </div>
+                </div>
+                <?php endif; ?>
+
                 <?php if (has_role('admin')): ?>
                 <div style="margin-top:40px; text-align:right;">
                     <button onclick="window.purgeFilm(<?= $movieId ?>)" style="background:none; border:none; color:rgba(255,77,77,0.4); font-size:0.6rem; cursor:pointer; text-transform:uppercase; letter-spacing:1px;">
@@ -710,6 +732,29 @@ $canonicalUrl  = 'https://adnmovie.fr/fiche.php?id=' . $tmdbId
                 <?php endif; ?>
 
                 <?php renderCommentSection('TV-' . $tmdbId, $currentUser, $userId); ?>
+
+                <?php
+                $seriesLocalIdForDna = isset($seriesLocalRow['id']) ? (int)$seriesLocalRow['id'] : 0;
+                $refSeriesDna = $seriesLocalIdForDna ? array_column(
+                    db_fetch_all('SELECT criterio, avg_score FROM series_dna WHERE series_id = ?', [$seriesLocalIdForDna]),
+                    'avg_score', 'criterio'
+                ) : [];
+                $similarContent = get_similar_content_by_dna($refSeriesDna, 0, $seriesLocalIdForDna, 12);
+                if (!empty($similarContent)):
+                ?>
+                <div style="margin-top:50px;">
+                    <h3 style="font-size:0.8rem; letter-spacing:2px; color:var(--text-dim); margin-bottom:16px;">DANS LE MÊME GENRE</h3>
+                    <div class="h-scroll">
+                        <?php foreach ($similarContent as $item):
+                            renderMovieCard($item, [
+                                'show_meta'    => true,
+                                'show_badges'  => false,
+                                'content_type' => $item['content_type'],
+                            ]);
+                        endforeach; ?>
+                    </div>
+                </div>
+                <?php endif; ?>
 
                 <div style="margin-top:30px; opacity:0.3;">
                     <?php renderTMDBAttribution(); ?>

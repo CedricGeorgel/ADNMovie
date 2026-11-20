@@ -617,3 +617,91 @@ function compute_dna_match(array $user, array $content): array
 
     return ['global' => $global, 'genes' => $genes];
 }
+
+/**
+ * Retourne les N contenus (films + séries) les plus proches en ADN d'un vecteur de référence.
+ * Distance = somme des carrés des écarts sur chaque critère.
+ *
+ * @param array $refDna              ['criterio' => avg_score, ...]
+ * @param int   $excludeMovieTmdbId  tmdb_id du film courant à exclure
+ * @param int   $excludeSeriesLocalId id local de la série courante à exclure
+ * @param int   $limit
+ * @return array  [['id'=>tmdb_id, 'title', 'poster', 'year', 'content_type'], ...]
+ */
+function get_similar_content_by_dna(array $refDna, int $excludeMovieTmdbId = 0, int $excludeSeriesLocalId = 0, int $limit = 12): array {
+    if (count($refDna) < 4) return [];
+
+    // Charger tous les DNA films
+    $allMovieDna = db_fetch_all('SELECT movie_id, criterio, avg_score FROM movie_dna');
+    $dnaByMovie = [];
+    foreach ($allMovieDna as $r) {
+        $mid = (int)$r['movie_id'];
+        if ($mid === $excludeMovieTmdbId) continue;
+        $dnaByMovie[$mid][$r['criterio']] = (float)$r['avg_score'];
+    }
+
+    // Charger tous les DNA séries
+    $allSeriesDna = db_fetch_all('SELECT series_id, criterio, avg_score FROM series_dna');
+    $dnaBySeries = [];
+    foreach ($allSeriesDna as $r) {
+        $sid = (int)$r['series_id'];
+        if ($sid === $excludeSeriesLocalId) continue;
+        $dnaBySeries[$sid][$r['criterio']] = (float)$r['avg_score'];
+    }
+
+    // Calculer les distances
+    $distances = [];
+    foreach ($dnaByMovie as $mid => $dna) {
+        if (count($dna) < 4) continue;
+        $dist = 0.0;
+        foreach ($refDna as $k => $v) {
+            $diff = (float)$v - (float)($dna[$k] ?? 0);
+            $dist += $diff * $diff;
+        }
+        $distances[] = ['local_id' => $mid, 'dist' => $dist, 'type' => 'movie'];
+    }
+    foreach ($dnaBySeries as $sid => $dna) {
+        if (count($dna) < 4) continue;
+        $dist = 0.0;
+        foreach ($refDna as $k => $v) {
+            $diff = (float)$v - (float)($dna[$k] ?? 0);
+            $dist += $diff * $diff;
+        }
+        $distances[] = ['local_id' => $sid, 'dist' => $dist, 'type' => 'series'];
+    }
+
+    if (empty($distances)) return [];
+    usort($distances, fn($a, $b) => $a['dist'] <=> $b['dist']);
+    $distances = array_slice($distances, 0, $limit);
+
+    // Récupérer les détails en batch
+    $movieIds  = array_column(array_filter($distances, fn($d) => $d['type'] === 'movie'),  'local_id');
+    $seriesIds = array_column(array_filter($distances, fn($d) => $d['type'] === 'series'), 'local_id');
+
+    $movieMap = $seriesMap = [];
+    if (!empty($movieIds)) {
+        $ph   = implode(',', array_fill(0, count($movieIds), '?'));
+        $rows = db_fetch_all("SELECT tmdb_id AS id, title, poster, year FROM movies WHERE tmdb_id IN ($ph)", $movieIds);
+        foreach ($rows as $r) $movieMap[(int)$r['id']] = $r;
+    }
+    if (!empty($seriesIds)) {
+        $ph   = implode(',', array_fill(0, count($seriesIds), '?'));
+        $rows = db_fetch_all("SELECT id AS local_id, tmdb_id AS id, title, poster, year FROM series WHERE id IN ($ph)", $seriesIds);
+        foreach ($rows as $r) $seriesMap[(int)$r['local_id']] = $r;
+    }
+
+    // Reconstruire dans l'ordre de distance
+    $result = [];
+    foreach ($distances as $d) {
+        if ($d['type'] === 'movie' && isset($movieMap[$d['local_id']])) {
+            $item = $movieMap[$d['local_id']];
+            $item['content_type'] = 'movie';
+            $result[] = $item;
+        } elseif ($d['type'] === 'series' && isset($seriesMap[$d['local_id']])) {
+            $item = $seriesMap[$d['local_id']];
+            $item['content_type'] = 'tv';
+            $result[] = $item;
+        }
+    }
+    return $result;
+}
