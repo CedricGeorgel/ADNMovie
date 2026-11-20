@@ -204,12 +204,13 @@ if ($contentType === 'movie') {
         if ($seriesRow) {
             $seriesLocalId = (int)$seriesRow['id'];
             $seriesRating  = db_fetch_one(
-                'SELECT scores, is_liked FROM series_ratings WHERE user_id = ? AND series_id = ?',
+                'SELECT scores, is_liked, like_score FROM series_ratings WHERE user_id = ? AND series_id = ?',
                 [$userId, $seriesLocalId]
             );
             if ($seriesRating) {
-                $seriesIsLiked        = (bool)$seriesRating['is_liked'];
-                $seriesExistingScores = json_decode($seriesRating['scores'], true);
+                $seriesIsLiked            = (bool)$seriesRating['is_liked'];
+                $seriesExistingScores     = json_decode($seriesRating['scores'], true);
+                $seriesExistingLikeScore  = $seriesRating['like_score'];
             }
         }
     }
@@ -235,21 +236,23 @@ if ($userId && isset($seriesLocalId)) {
     if ($seriesData) upsert_series_metadata($tmdbId, $seriesData);
 
     // Note de saison de l'utilisateur connecté
-    $seasonIsLiked         = false;
-    $seasonExistingScores  = null;
-    $seasonSeriesLocalId   = null;
+    $seasonIsLiked             = false;
+    $seasonExistingScores      = null;
+    $seasonSeriesLocalId       = null;
+    $seasonExistingLikeScore   = null;
     if ($userId) {
         $seriesRow = db_fetch_one('SELECT id FROM series WHERE tmdb_id = ?', [$tmdbId]);
         if ($seriesRow) {
             $seasonSeriesLocalId = (int)$seriesRow['id'];
             $snRating = db_fetch_one(
-                'SELECT scores, is_liked FROM season_ratings
+                'SELECT scores, is_liked, like_score FROM season_ratings
                  WHERE user_id = ? AND series_id = ? AND season_number = ?',
                 [$userId, $seasonSeriesLocalId, $season]
             );
             if ($snRating) {
-                $seasonIsLiked        = (bool)$snRating['is_liked'];
-                $seasonExistingScores = json_decode($snRating['scores'], true);
+                $seasonIsLiked            = (bool)$snRating['is_liked'];
+                $seasonExistingScores     = json_decode($snRating['scores'], true);
+                $seasonExistingLikeScore  = $snRating['like_score'];
             }
         }
     }
@@ -937,7 +940,7 @@ $canonicalUrl  = 'https://adnmovie.fr/fiche.php?id=' . $tmdbId
             $seriesLocalId,
             $seriesExistingScores,
             $seriesIsLiked ?? false,
-            null,
+            $seriesExistingLikeScore ?? null,
             'tv_full'
         ); ?>
         <?php renderSignalModal(); ?>
@@ -950,7 +953,7 @@ $canonicalUrl  = 'https://adnmovie.fr/fiche.php?id=' . $tmdbId
             $seasonSeriesLocalId,
             $seasonExistingScores,
             $seasonIsLiked,
-            null,
+            $seasonExistingLikeScore ?? null,
             'tv',
             $season
         ); ?>
