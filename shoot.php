@@ -119,23 +119,23 @@ if ($hasUserMovieDna && !empty($platformMovieIds)) {
         ];
     }
 
-    $bestScore = -1.0;
-    $bestMovie = null;
+    $scoredFilms = [];
     foreach ($films as $film) {
         if (count($film['dna']) < 4) continue;
         $result    = calculateSimilarityWithReasons($userMovieDna, $film['dna']);
         $polarNorm = min(1.0, $film['polarization'] / 20.0);
         $score     = $result['score'] * (1.0 - $polarNorm * (1.0 - $epsilon));
-        if ($score > $bestScore) {
-            $bestScore = $score;
-            $bestMovie = $film;
-        }
+        $scoredFilms[] = ['film' => $film, 'score' => $score, 'reasons' => $result['reasons']];
     }
+    usort($scoredFilms, fn($a, $b) => $b['score'] <=> $a['score']);
 
-    if ($bestMovie) {
-        $topMovie      = $bestMovie;
-        $topMovieScore = (int)round($bestScore * 100); // converti en %
+    if (!empty($scoredFilms)) {
+        $topMovieData  = $scoredFilms[0];
+        $topMovie      = $topMovieData['film'];
+        $topMovieScore = (int)round($topMovieData['score'] * 100);
         $topMovieMode  = 'dna';
+        $topMovieReasons    = $topMovieData['reasons'];
+        $topMovieAlternatives = array_slice($scoredFilms, 1, 4); // top 4 suivants
     }
 }
 
@@ -243,26 +243,27 @@ if ($hasUserDna) {
             ];
         }
 
-        $bestScore  = -1.0;
-        $bestSeries = null;
+        $scoredSeries = [];
         foreach ($candidates as $s) {
-            $sid      = (int)$s['id'];
+            $sid       = (int)$s['id'];
             $seriesDna = $dnaBySeries[$sid] ?? [];
             if (count($seriesDna) < 4) continue;
             $result    = calculateSimilarityWithReasons($userSeriesDna, $seriesDna);
             $polarNorm = min(1.0, (float)$s['polarization_index'] / 20.0);
             $score     = $result['score'] * (1.0 - $polarNorm * (1.0 - $epsilonSeries));
-            if ($score > $bestScore) {
-                $bestScore  = $score;
-                $bestSeries = $s;
-            }
+            $scoredSeries[] = ['series' => $s, 'score' => $score, 'reasons' => $result['reasons']];
         }
+        usort($scoredSeries, fn($a, $b) => $b['score'] <=> $a['score']);
 
-        if ($bestSeries) {
-            $topSeries           = $bestSeries;
-            $topSeries['id']     = (int)$bestSeries['tmdb_id'];
-            $topSeriesScore      = (int)round($bestScore * 100); // converti en %
-            $topSeriesMode       = 'dna';
+        if (!empty($scoredSeries)) {
+            $topSeriesData             = $scoredSeries[0];
+            $bestSeries                = $topSeriesData['series'];
+            $topSeries                 = $bestSeries;
+            $topSeries['id']           = (int)$bestSeries['tmdb_id'];
+            $topSeriesScore            = (int)round($topSeriesData['score'] * 100);
+            $topSeriesMode             = 'dna';
+            $topSeriesReasons          = $topSeriesData['reasons'];
+            $topSeriesAlternatives     = array_slice($scoredSeries, 1, 4);
         }
     }
 }
@@ -487,6 +488,146 @@ function formatCommunityScore(float $score): string {
                 </div>
 
             </div>
+
+            <?php if (has_role('admin')): ?>
+            <?php
+            // ── Debug panel data ──────────────────────────────────────────────
+            $SALIENCY_THRESHOLD = 2.0;
+            $dbgMovieSalient = [];
+            foreach ($userMovieDna as $k => $d) {
+                if (abs($d['avg']) >= $SALIENCY_THRESHOLD) {
+                    $dbgMovieSalient[$k] = $d;
+                }
+            }
+            $dbgSeriesSalient = [];
+            foreach ($userSeriesDna as $k => $d) {
+                if (abs($d['avg']) >= $SALIENCY_THRESHOLD) {
+                    $dbgSeriesSalient[$k] = $d;
+                }
+            }
+            $criteriaLabels = [
+                'complexite'=>'Complexité','emotion'=>'Émotion','realisme'=>'Réalisme',
+                'rythme'=>'Rythme','noirceur'=>'Noirceur','originalite'=>'Originalité',
+                'humour'=>'Humour','romance'=>'Romance','violence'=>'Violence',
+                'erotisme'=>'Érotisme','message_politique'=>'Politique',
+            ];
+            ?>
+            <details style="max-width:700px;margin:0 auto 40px;border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:0;">
+                <summary style="padding:14px 18px;cursor:pointer;font-size:0.65rem;font-weight:900;letter-spacing:3px;color:var(--text-dim);list-style:none;display:flex;align-items:center;gap:8px;">
+                    <span style="font-size:0.75rem;">🔬</span> DEBUG ALGO
+                </summary>
+                <div style="padding:0 18px 18px;display:grid;grid-template-columns:1fr 1fr;gap:24px;">
+
+                    <!-- ADN Films saillant -->
+                    <div>
+                        <div style="font-size:0.6rem;font-weight:800;letter-spacing:2px;color:var(--text-dim);margin-bottom:10px;">ADN FILMS SAILLANT (|avg|≥2)</div>
+                        <?php if (empty($dbgMovieSalient)): ?>
+                            <p style="font-size:0.75rem;color:var(--text-dim);">Aucun axe saillant</p>
+                        <?php else: ?>
+                        <?php foreach ($dbgMovieSalient as $k => $d): ?>
+                            <div style="display:flex;justify-content:space-between;font-size:0.72rem;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.04);">
+                                <span style="color:var(--text-dim);"><?= h($criteriaLabels[$k] ?? $k) ?></span>
+                                <span style="font-weight:700;color:<?= $d['avg'] > 0 ? '#9dffb0' : '#f87171' ?>;">
+                                    <?= ($d['avg'] > 0 ? '+' : '') . number_format($d['avg'], 1) ?>
+                                    <span style="font-weight:400;color:var(--text-dim);font-size:0.65rem;">±<?= number_format(sqrt($d['var'] ?? 0), 1) ?></span>
+                                </span>
+                            </div>
+                        <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
+
+                    <!-- ADN Séries saillant -->
+                    <div>
+                        <div style="font-size:0.6rem;font-weight:800;letter-spacing:2px;color:var(--text-dim);margin-bottom:10px;">ADN SÉRIES SAILLANT (|avg|≥2)</div>
+                        <?php if (empty($dbgSeriesSalient)): ?>
+                            <p style="font-size:0.75rem;color:var(--text-dim);">Aucun axe saillant</p>
+                        <?php else: ?>
+                        <?php foreach ($dbgSeriesSalient as $k => $d): ?>
+                            <div style="display:flex;justify-content:space-between;font-size:0.72rem;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.04);">
+                                <span style="color:var(--text-dim);"><?= h($criteriaLabels[$k] ?? $k) ?></span>
+                                <span style="font-weight:700;color:<?= $d['avg'] > 0 ? '#9dffb0' : '#f87171' ?>;">
+                                    <?= ($d['avg'] > 0 ? '+' : '') . number_format($d['avg'], 1) ?>
+                                    <span style="font-weight:400;color:var(--text-dim);font-size:0.65rem;">±<?= number_format(sqrt($d['var'] ?? 0), 1) ?></span>
+                                </span>
+                            </div>
+                        <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
+
+                    <!-- Candidats films -->
+                    <div>
+                        <div style="font-size:0.6rem;font-weight:800;letter-spacing:2px;color:var(--text-dim);margin-bottom:10px;">FILMS CANDIDATS</div>
+                        <div style="font-size:0.8rem;color:var(--text);">
+                            <?= count($platformMovieIds) ?> films sur abonnements
+                            <?php if (isset($scoredFilms)): ?>
+                            · <?= count($scoredFilms) ?> avec ADN
+                            <?php endif; ?>
+                        </div>
+                        <?php if (!empty($topMovieReasons ?? [])): ?>
+                        <div style="margin-top:10px;font-size:0.6rem;font-weight:800;letter-spacing:2px;color:var(--text-dim);margin-bottom:6px;">FILM RETENU — SCORE PAR AXE</div>
+                        <?php foreach (($topMovieReasons ?? []) as $r): ?>
+                        <?php if (abs($r['user_val'] ?? 0) < 0.5 && abs($r['film_val'] ?? 0) < 0.5) continue; ?>
+                            <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.7rem;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.04);">
+                                <span style="color:var(--text-dim);flex:1;"><?= h($criteriaLabels[$r['criterio'] ?? ''] ?? ($r['criterio'] ?? '')) ?></span>
+                                <span style="color:var(--text-dim);font-size:0.65rem;margin-right:6px;">
+                                    moi:<?= number_format($r['user_val'] ?? 0, 1) ?> film:<?= number_format($r['film_val'] ?? 0, 1) ?>
+                                </span>
+                                <span style="font-weight:700;color:<?= ($r['contribution'] ?? 0) > 0.5 ? '#9dffb0' : (($r['contribution'] ?? 0) < 0.2 ? '#f87171' : 'var(--text)') ?>;">
+                                    <?= number_format(($r['contribution'] ?? 0) * 100, 0) ?>%
+                                </span>
+                            </div>
+                        <?php endforeach; ?>
+                        <?php endif; ?>
+                        <?php if (!empty($topMovieAlternatives ?? [])): ?>
+                        <div style="margin-top:10px;font-size:0.6rem;font-weight:800;letter-spacing:2px;color:var(--text-dim);margin-bottom:6px;">TOP ALTERNATIVES</div>
+                        <?php foreach (($topMovieAlternatives ?? []) as $alt): ?>
+                            <div style="font-size:0.72rem;padding:3px 0;display:flex;justify-content:space-between;">
+                                <span style="color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:70%;"><?= h($alt['film']['title'] ?? '') ?></span>
+                                <span style="font-weight:700;color:var(--accent);"><?= (int)round($alt['score']*100) ?>%</span>
+                            </div>
+                        <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
+
+                    <!-- Candidats séries -->
+                    <div>
+                        <div style="font-size:0.6rem;font-weight:800;letter-spacing:2px;color:var(--text-dim);margin-bottom:10px;">SÉRIES CANDIDATES</div>
+                        <div style="font-size:0.8rem;color:var(--text);">
+                            <?= count($platformSeriesLocalIds ?? []) ?> séries sur abonnements
+                            <?php if (isset($scoredSeries)): ?>
+                            · <?= count($scoredSeries) ?> avec ADN
+                            <?php endif; ?>
+                        </div>
+                        <?php if (!empty($topSeriesReasons ?? [])): ?>
+                        <div style="margin-top:10px;font-size:0.6rem;font-weight:800;letter-spacing:2px;color:var(--text-dim);margin-bottom:6px;">SÉRIE RETENUE — SCORE PAR AXE</div>
+                        <?php foreach (($topSeriesReasons ?? []) as $r): ?>
+                        <?php if (abs($r['user_val'] ?? 0) < 0.5 && abs($r['film_val'] ?? 0) < 0.5) continue; ?>
+                            <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.7rem;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.04);">
+                                <span style="color:var(--text-dim);flex:1;"><?= h($criteriaLabels[$r['criterio'] ?? ''] ?? ($r['criterio'] ?? '')) ?></span>
+                                <span style="color:var(--text-dim);font-size:0.65rem;margin-right:6px;">
+                                    moi:<?= number_format($r['user_val'] ?? 0, 1) ?> film:<?= number_format($r['film_val'] ?? 0, 1) ?>
+                                </span>
+                                <span style="font-weight:700;color:<?= ($r['contribution'] ?? 0) > 0.5 ? '#9dffb0' : (($r['contribution'] ?? 0) < 0.2 ? '#f87171' : 'var(--text)') ?>;">
+                                    <?= number_format(($r['contribution'] ?? 0) * 100, 0) ?>%
+                                </span>
+                            </div>
+                        <?php endforeach; ?>
+                        <?php endif; ?>
+                        <?php if (!empty($topSeriesAlternatives ?? [])): ?>
+                        <div style="margin-top:10px;font-size:0.6rem;font-weight:800;letter-spacing:2px;color:var(--text-dim);margin-bottom:6px;">TOP ALTERNATIVES</div>
+                        <?php foreach (($topSeriesAlternatives ?? []) as $alt): ?>
+                            <div style="font-size:0.72rem;padding:3px 0;display:flex;justify-content:space-between;">
+                                <span style="color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:70%;"><?= h($alt['series']['title'] ?? '') ?></span>
+                                <span style="font-weight:700;color:var(--accent);"><?= (int)round($alt['score']*100) ?>%</span>
+                            </div>
+                        <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
+
+                </div>
+            </details>
+            <?php endif; ?>
+
         <?php endif; ?>
 
     </main>
