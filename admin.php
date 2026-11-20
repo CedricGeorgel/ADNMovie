@@ -63,6 +63,7 @@ $topUsers = db_fetch_all('SELECT u.id, u.username, u.avatar, COUNT(r.movie_id) A
 $topMovies = db_fetch_all('SELECT m.tmdb_id, m.title, m.poster, m.year, m.total_votes FROM movies m ORDER BY m.total_votes DESC LIMIT 3');
 
 $badgeLibrary = get_badge_library();
+uasort($badgeLibrary, fn($a, $b) => strcmp($a['label'], $b['label']));
 $allUsers = db_fetch_all('SELECT id, username, avatar, role, is_flagged FROM users WHERE is_anonymized = 0');
 $activityRows = db_fetch_all('SELECT user_id, COUNT(*) AS cnt FROM ratings WHERE scores IS NOT NULL GROUP BY user_id');
 $accessAttempts = db_fetch_all(
@@ -137,10 +138,10 @@ $userActivity = array_column($activityRows, 'cnt', 'user_id');
                             <p style="font-size:0.65rem;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim);margin-bottom:10px;font-weight:800;">Accréditation</p>
                             <div class="admin-btns-row" style="display:flex;gap:10px;align-items:center;">
                                 <select id="targetRole" class="admin-select" style="flex:1;margin:0;">
+                                    <option value="admin">Administrateur</option>
+                                    <option value="moderator">Modérateur</option>
                                     <option value="user">Spécimen (user)</option>
                                     <option value="vip">VIP</option>
-                                    <option value="moderator">Modérateur</option>
-                                    <option value="admin">Administrateur</option>
                                 </select>
                                 <button id="btnSetRole" class="btn-base" style="flex:1;">Définir</button>
                             </div>

@@ -95,17 +95,19 @@ document.addEventListener('DOMContentLoaded', () => {
             container.innerHTML = '<span style="font-size:0.7rem; color:var(--text-dim);">Aucun succès</span>';
             return;
         }
-        userBadges.forEach(bk => {
-            const b = data.badgeLib[bk];
-            if (b) {
-                const span = document.createElement('span');
-                span.className = 'p-badge-tag';
-                span.style.color = b.color;
-                span.style.borderColor = b.color + '44';
-                span.innerText = b.label;
-                container.appendChild(span);
-            }
-        });
+        [...userBadges]
+            .sort((a, b) => (data.badgeLib[a]?.label || a).localeCompare(data.badgeLib[b]?.label || b, 'fr'))
+            .forEach(bk => {
+                const b = data.badgeLib[bk];
+                if (b) {
+                    const span = document.createElement('span');
+                    span.className = 'p-badge-tag';
+                    span.style.color = b.color;
+                    span.style.borderColor = b.color + '44';
+                    span.innerText = b.label;
+                    container.appendChild(span);
+                }
+            });
     }
 
     window.selectUserDirect = (id, username) => {
