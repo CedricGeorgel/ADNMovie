@@ -161,7 +161,7 @@ function renderWatchProviders(int $tmdbId, string $title = '', array $userPlatfo
     $providers = _filter_providers($providers ?? []);
 
     $hasProviders = !empty($providers['flatrate']) || !empty($providers['buy']);
-    $isAdmin      = function_exists('has_role') && has_role('admin');
+    $isAdmin      = function_exists('has_vip_access') && has_vip_access();
 
     if (!$hasProviders && !$isAdmin) {
         echo '<p class="no-providers">Non disponible en streaming actuellement.</p>';
@@ -221,7 +221,7 @@ function renderWatchProviders(int $tmdbId, string $title = '', array $userPlatfo
 
         <?php if ($isAdmin): ?>
             <div class="provider-section" style="margin-top:10px;">
-                <span class="provider-type" style="opacity:0.4;">Admin</span>
+                <span class="provider-type" style="opacity:0.4;">VIP</span>
                 <div class="provider-logos">
                     <button id="btn-play-imdb" onclick="window.playImdb(<?= $tmdbId ?>)" style="background:none; border:1px solid rgba(255,255,255,0.15); color:rgba(255,255,255,0.45); font-size:0.6rem; cursor:pointer; text-transform:uppercase; letter-spacing:1px; padding:7px 12px; border-radius:8px; white-space:nowrap;">
                         ▶ IMDb Player

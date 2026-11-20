@@ -138,6 +138,7 @@ $userActivity = array_column($activityRows, 'cnt', 'user_id');
                             <div class="admin-btns-row" style="display:flex;gap:10px;align-items:center;">
                                 <select id="targetRole" class="admin-select" style="flex:1;margin:0;">
                                     <option value="user">Spécimen (user)</option>
+                                    <option value="vip">VIP</option>
                                     <option value="moderator">Modérateur</option>
                                     <option value="admin">Administrateur</option>
                                 </select>
@@ -579,7 +580,7 @@ $userActivity = array_column($activityRows, 'cnt', 'user_id');
         activity: <?= json_encode($userActivity) ?>,
         badgeLib: <?= json_encode($badgeLibrary) ?>,
     };
-    window.MOOVIE_ROLE_LABELS = { user: 'Spécimen', moderator: 'Modérateur', admin: 'Administrateur', superadmin: 'Administrateur' };
+    window.MOOVIE_ROLE_LABELS = { user: 'Spécimen', vip: 'VIP', moderator: 'Modérateur', admin: 'Administrateur', superadmin: 'Administrateur' };
     </script>
     <script src="assets/js/ui.js" defer></script>
     <script src="assets/js/admin.js?v=<?= filemtime('assets/js/admin.js') ?>"></script>

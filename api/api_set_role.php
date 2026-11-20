@@ -19,7 +19,7 @@ if (!has_role('admin')) {
 $targetId = $_POST['target_id'] ?? '';
 $newRole  = $_POST['role']      ?? '';
 
-$allowedRoles = ['user', 'moderator', 'admin'];
+$allowedRoles = ['user', 'vip', 'moderator', 'admin'];
 if (!$targetId || !in_array($newRole, $allowedRoles, true)) {
     echo json_encode(['success' => false, 'message' => 'Paramètres invalides.']);
     exit;

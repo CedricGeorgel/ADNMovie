@@ -12,11 +12,12 @@
  *   current_role()                   // Retourne le rôle actuel
  */
 
-const ROLE_HIERARCHY = ['user' => 0, 'moderator' => 1, 'admin' => 2, 'superadmin' => 3];
+const ROLE_HIERARCHY = ['user' => 0, 'vip' => 0, 'moderator' => 1, 'admin' => 2, 'superadmin' => 3];
 
 // Configuration visuelle par rôle
 const ROLE_CONFIG = [
     'user'       => ['label' => 'Spécimen',       'color' => '#A7C7E7', 'bg' => 'rgba(167,199,231,0.12)', 'border' => 'rgba(167,199,231,0.35)'],
+    'vip'        => ['label' => 'VIP',            'color' => '#f0c27f', 'bg' => 'rgba(240,194,127,0.12)', 'border' => 'rgba(240,194,127,0.35)'],
     'moderator'  => ['label' => 'Modérateur',     'color' => '#6ee7b7', 'bg' => 'rgba(110,231,183,0.12)', 'border' => 'rgba(110,231,183,0.35)'],
     'admin'      => ['label' => 'Administrateur', 'color' => '#f87171', 'bg' => 'rgba(248,113,113,0.12)', 'border' => 'rgba(248,113,113,0.35)'],
     'superadmin' => ['label' => 'Administrateur', 'color' => '#f87171', 'bg' => 'rgba(248,113,113,0.12)', 'border' => 'rgba(248,113,113,0.35)'],
@@ -63,6 +64,13 @@ function require_role(string $minRole): void {
             <a href="index.php" style="color:#A7C7E7;">← Retour</a>
         </div>');
     }
+}
+
+/**
+ * Vérifie si l'utilisateur a accès aux fonctionnalités VIP (vip, moderator, admin, superadmin).
+ */
+function has_vip_access(): bool {
+    return in_array(current_role(), ['vip', 'moderator', 'admin', 'superadmin'], true);
 }
 
 /**
