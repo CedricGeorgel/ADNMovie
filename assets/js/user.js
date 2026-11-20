@@ -1,12 +1,35 @@
 let _allProviders = null;
 
 function switchProfileTab(tab) {
-    const tabs = ['profil', 'plateformes', 'confidentialite', 'import'];
+    const tabs = ['profil', 'plateformes', 'confidentialite', 'import', 'donnees'];
     tabs.forEach(t => {
         document.getElementById('tab-' + t).style.display = (t === tab) ? 'block' : 'none';
         document.getElementById('tab-btn-' + t)?.classList.toggle('active', t === tab);
     });
     if (tab === 'plateformes') loadPlatforms();
+}
+
+async function resetSkippedFilms() {
+    const btn = document.getElementById('btn-reset-skipped');
+    if (!confirm('Remettre en jeu tous les films passés avec "Pas ce soir" ?')) return;
+    btn.textContent = '…';
+    btn.disabled = true;
+    try {
+        const r = await fetch('api/api_reset_skipped.php', { method: 'POST' });
+        const d = await r.json();
+        if (d.success) {
+            btn.textContent = d.reset > 0 ? `✓ ${d.reset} film${d.reset > 1 ? 's' : ''} remis en jeu` : '✓ Aucun film à réinitialiser';
+            btn.style.color = '#6ee7b7';
+            btn.style.borderColor = 'rgba(110,231,183,0.3)';
+            btn.style.background = 'rgba(110,231,183,0.07)';
+        } else {
+            btn.textContent = 'Erreur';
+            btn.disabled = false;
+        }
+    } catch(e) {
+        btn.textContent = 'Erreur réseau';
+        btn.disabled = false;
+    }
 }
 
 function openProfileEditor(tab) {
