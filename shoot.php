@@ -17,6 +17,26 @@ check_auth();
 $userId = $_SESSION['user_id'];
 $user   = get_user_by_id($userId);
 
+// ── Skip : on ajoute l'id rejeté en session, reset possible ──────────────────
+$skipKey = 'shoot_skip_' . $userId;
+if (isset($_GET['reset_skip'])) {
+    $_SESSION[$skipKey] = [];
+}
+if (isset($_GET['skip_series'])) {
+    $_SESSION[$skipKey]['series'] = array_merge(
+        $_SESSION[$skipKey]['series'] ?? [],
+        [(int)$_GET['skip_series']]
+    );
+}
+if (isset($_GET['skip_movie'])) {
+    $_SESSION[$skipKey]['movies'] = array_merge(
+        $_SESSION[$skipKey]['movies'] ?? [],
+        [(int)$_GET['skip_movie']]
+    );
+}
+$skippedSeriesTmdbIds = $_SESSION[$skipKey]['series'] ?? [];
+$skippedMovieTmdbIds  = $_SESSION[$skipKey]['movies'] ?? [];
+
 $subscribedIds = array_map('intval', json_decode($user['user_platforms'] ?? '[]', true) ?: []);
 $hasPlatforms  = !empty($subscribedIds);
 
@@ -25,6 +45,7 @@ $seenMovieIds = array_column(
     db_fetch_all("SELECT movie_id FROM ratings WHERE user_id = ? AND user_id != 'IA-ORACLE-001'", [$userId]),
     'movie_id'
 ) ?: [0];
+$seenMovieIds = array_values(array_unique(array_merge($seenMovieIds, $skippedMovieTmdbIds))) ?: [0];
 
 // ── Séries déjà vues (hors Oracle) ───────────────────────────────────────────
 $seenSeriesIds = array_column(
@@ -92,7 +113,17 @@ $topSeries      = null;
 $topSeriesScore = null;
 $topSeriesMode  = 'dna'; // 'dna' | 'community'
 
-$seenIn = implode(',', $seenSeriesIds);
+// Convertir les tmdb_ids skippés en ids locaux
+$skippedSeriesLocalIds = [];
+if (!empty($skippedSeriesTmdbIds)) {
+    $inPH = implode(',', array_fill(0, count($skippedSeriesTmdbIds), '?'));
+    $skippedSeriesLocalIds = array_column(
+        db_fetch_all("SELECT id FROM series WHERE tmdb_id IN ($inPH)", $skippedSeriesTmdbIds),
+        'id'
+    );
+}
+$allExcludedSeriesLocalIds = array_values(array_unique(array_merge($seenSeriesIds, $skippedSeriesLocalIds))) ?: [0];
+$seenIn = implode(',', $allExcludedSeriesLocalIds);
 
 $platformSeriesLocalIds = null; // ids locaux (series.id)
 if ($hasPlatforms) {
@@ -175,7 +206,7 @@ if ($hasUserDna) {
 if (!$topSeries) {
     $topSeriesMode = 'community';
     $topSeriesRow  = db_fetch_one(
-        "SELECT s.tmdb_id AS id, s.title, s.poster, s.year, s.total_votes,
+        "SELECT s.tmdb_id AS id, s.tmdb_id, s.title, s.poster, s.year, s.total_votes,
                 ROUND(AVG(sr.like_score), 1) AS community_score,
                 COUNT(sr.like_score)         AS vote_count
          FROM series s
@@ -294,6 +325,19 @@ function formatCommunityScore(float $score): string {
             text-decoration: underline;
         }
 
+        .shoot-skip-btn {
+            display: block;
+            text-align: center;
+            font-size: 0.72rem;
+            color: var(--text-dim);
+            text-decoration: none;
+            margin-top: 8px;
+            padding: 6px;
+            border-radius: 6px;
+            transition: color 0.15s;
+        }
+        .shoot-skip-btn:hover { color: var(--text); }
+
         @media (max-width: 540px) {
             .shoot-grid {
                 grid-template-columns: 1fr 1fr;
@@ -313,7 +357,7 @@ function formatCommunityScore(float $score): string {
 
         <section class="shoot-hero">
             <h1>SHOOT</h1>
-            <p>Le meilleur match ADN parmi les séries de tes abonnements — que tu n'as pas encore vus.</p>
+            <p>Le meilleur match ADN parmi les séries de tes abonnements et que tu n'as pas encore vus.</p>
         </section>
 
         <?php if (!$hasPlatforms): ?>
@@ -341,6 +385,7 @@ function formatCommunityScore(float $score): string {
                             'content_type' => 'movie',
                             'extra_label'  => formatCommunityScore($topMovieScore),
                         ]); ?>
+                        <a href="?skip_movie=<?= (int)$topMovie['id'] ?>" class="shoot-skip-btn">Pas ce soir →</a>
                     <?php else: ?>
                         <p class="shoot-empty">Aucun film trouvé sur tes abonnements.</p>
                     <?php endif; ?>
@@ -363,6 +408,7 @@ function formatCommunityScore(float $score): string {
                                 ? ((int)$topSeriesScore . '% match ADN')
                                 : formatCommunityScore($topSeriesScore),
                         ]); ?>
+                        <a href="?skip_series=<?= (int)$topSeries['tmdb_id'] ?>" class="shoot-skip-btn">Pas ce soir →</a>
                     <?php else: ?>
                         <p class="shoot-empty">Aucune série trouvée.</p>
                     <?php endif; ?>
