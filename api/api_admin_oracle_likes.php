@@ -62,53 +62,42 @@ if ($type === 'movie') {
     }
 
 // ── Séries ────────────────────────────────────────────────────────────────────
+// Utilise la note globale TMDB /tv/{id} (1 appel par série) pour aller vite.
+// Le cron fait les saisons une par une et recalculera series_ratings avec précision.
 } elseif ($type === 'series') {
-    $total = (int)$pdo->query("SELECT COUNT(*) FROM series WHERE total_seasons > 0")->fetchColumn();
+    $total = (int)$pdo->query("SELECT COUNT(*) FROM series")->fetchColumn();
     $stmt  = $pdo->query(
-        "SELECT id, tmdb_id, total_seasons FROM series
-         WHERE total_seasons > 0
+        "SELECT id, tmdb_id FROM series
          ORDER BY id LIMIT {$limit} OFFSET {$offset}"
     );
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     foreach ($rows as $row) {
-        $seriesId     = (int)$row['id'];
-        $tmdbId       = (int)$row['tmdb_id'];
-        $totalSeasons = (int)$row['total_seasons'];
-        $seasonsDone  = 0;
+        $seriesId = (int)$row['id'];
+        $tmdbId   = (int)$row['tmdb_id'];
 
-        for ($sn = 1; $sn <= $totalSeasons; $sn++) {
-            $url = "https://api.themoviedb.org/3/tv/{$tmdbId}/season/{$sn}?api_key=" . TMDB_API_KEY;
-            $res = @file_get_contents($url);
-            if (!$res) { usleep(150000); continue; }
+        $url = "https://api.themoviedb.org/3/tv/{$tmdbId}?api_key=" . TMDB_API_KEY;
+        $res = @file_get_contents($url);
+        if (!$res) { $errors++; usleep(100000); continue; }
 
-            $data      = json_decode($res, true);
-            $voteAvg   = isset($data['vote_average']) ? (float)$data['vote_average'] : null;
-            $voteCount = (int)($data['vote_count'] ?? 0);
-            $likeScore = _oracle_vote_to_like_score($voteAvg, $voteCount);
+        $data      = json_decode($res, true);
+        $voteAvg   = isset($data['vote_average']) ? (float)$data['vote_average'] : null;
+        $voteCount = (int)($data['vote_count'] ?? 0);
+        $likeScore = _oracle_vote_to_like_score($voteAvg, $voteCount);
 
-            if ($likeScore === null) { usleep(50000); continue; }
+        if ($likeScore === null) { $skipped++; usleep(25000); continue; }
 
-            // Met à jour le like_score Oracle existant, ou insère si absent
-            $pdo->prepare(
-                "INSERT INTO season_ratings
-                    (user_id, series_id, season_number, scores, like_score, is_liked, rating_weight, rated_at)
-                 VALUES (?, ?, ?, NULL, ?, ?, ?, NOW())
-                 ON DUPLICATE KEY UPDATE
-                    like_score = VALUES(like_score),
-                    is_liked   = VALUES(is_liked)"
-            )->execute([ORACLE_USER_ID, $seriesId, $sn, $likeScore, $likeScore > 0 ? 1 : 0, ORACLE_WEIGHT]);
+        $pdo->prepare(
+            "INSERT INTO series_ratings
+                (user_id, series_id, scores, like_score, is_liked, rating_weight, rated_at)
+             VALUES (?, ?, NULL, ?, ?, ?, NOW())
+             ON DUPLICATE KEY UPDATE
+                like_score = VALUES(like_score),
+                is_liked   = VALUES(is_liked)"
+        )->execute([ORACLE_USER_ID, $seriesId, $likeScore, $likeScore > 0 ? 1 : 0, ORACLE_WEIGHT]);
 
-            $seasonsDone++;
-            usleep(80000);
-        }
-
-        if ($seasonsDone > 0) {
-            _oracle_recalc_series_aggregate($pdo, ORACLE_USER_ID, $seriesId);
-            $updated++;
-        } else {
-            $skipped++;
-        }
+        $updated++;
+        usleep(50000);
     }
 }
 
