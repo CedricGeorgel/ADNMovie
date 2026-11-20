@@ -518,6 +518,86 @@ try {
     echo "[ERREUR] Tâche 7b : " . $e->getMessage() . "\n\n";
 }
 
+// ── TÂCHE 7c : Scan nouvelles séries par provider (Discover) ─────────────────
+echo "-> Lancement Tâche 7c : Scan nouvelles séries provider...\n";
+flush();
+try {
+    if (!defined('TMDB_API_KEY') || empty(TMDB_API_KEY)) throw new Exception("Clé TMDB_API_KEY manquante.");
+
+    require_once __DIR__ . '/../functions/api_tmdb.php';
+
+    // Providers à scanner (FR) — page 1 de chacun (séries les plus populaires en premier)
+    $providers = [
+        350 => 'Apple TV+',
+        8   => 'Netflix',
+        119 => 'Prime Video',
+        337 => 'Disney+',
+        190 => 'Canal+',
+    ];
+
+    $newSeries = 0;
+
+    foreach ($providers as $pid => $pname) {
+        $url = "https://api.themoviedb.org/3/discover/tv"
+             . "?api_key=" . TMDB_API_KEY
+             . "&with_watch_providers={$pid}"
+             . "&watch_region=FR"
+             . "&sort_by=popularity.desc"
+             . "&page=1";
+
+        $raw = @file_get_contents($url);
+        if (!$raw) { usleep(500_000); continue; }
+
+        $data    = json_decode($raw, true);
+        $results = $data['results'] ?? [];
+
+        foreach ($results as $item) {
+            $tmdbId = (int)($item['id'] ?? 0);
+            if (!$tmdbId) continue;
+
+            // Déjà en BDD avec Oracle ? → skip
+            $existing = db_fetch_one(
+                "SELECT s.id FROM series s
+                 JOIN series_ratings sr ON sr.series_id = s.id AND sr.user_id = 'IA-ORACLE-001'
+                 WHERE s.tmdb_id = ?",
+                [$tmdbId]
+            );
+            if ($existing) continue;
+
+            $seriesData = fetch_tmdb_series($tmdbId);
+            if (!$seriesData) { usleep(300_000); continue; }
+
+            upsert_series_metadata($tmdbId, $seriesData);
+
+            // providers_data
+            $provUrl = "https://api.themoviedb.org/3/tv/{$tmdbId}/watch/providers?api_key=" . TMDB_API_KEY;
+            $provRaw = @file_get_contents($provUrl);
+            if ($provRaw) {
+                $provData  = json_decode($provRaw, true);
+                $providers_fr = $provData['results']['FR'] ?? [];
+                db_execute(
+                    'UPDATE series SET providers_data = ?, providers_updated_at = NOW() WHERE tmdb_id = ?',
+                    [json_encode($providers_fr, JSON_UNESCAPED_UNICODE), $tmdbId]
+                );
+            }
+
+            $newSeries++;
+            echo "  [NEW] {$pname} — {$seriesData['title']}\n";
+            usleep(300_000);
+        }
+
+        usleep(500_000); // pause entre providers
+    }
+
+    $report['tasks']['provider_series_scan'] = $newSeries;
+    echo "[OK] Scan provider séries : $newSeries nouvelles séries importées.\n\n";
+
+} catch (Exception $e) {
+    $report['errors'][] = "Tâche 7c : " . $e->getMessage();
+    $report['tasks']['provider_series_scan'] = 0;
+    echo "[ERREUR] Tâche 7c : " . $e->getMessage() . "\n\n";
+}
+
 // ── TÂCHE 8 : Purge notifications lues (> 30 jours) ─────────────────────────
 echo "-> Lancement Tâche 8 : Purge notifications lues...\n";
 flush();
