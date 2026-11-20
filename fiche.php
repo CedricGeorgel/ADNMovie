@@ -18,6 +18,7 @@ require_once 'components/avatar.php';
 require_once 'components/comment.php';
 require_once 'components/signal-btn.php';
 require_once 'functions/api_tmdb.php';
+require_once 'components/movie-card.php';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function renderDnaMatchBlock(array $m): void {
