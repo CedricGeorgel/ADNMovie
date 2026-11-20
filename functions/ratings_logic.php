@@ -589,31 +589,33 @@ function compute_dna_match(array $user, array $content): array
                'malaise'=>'Malaise','stylisation'=>'Stylisation','dynamique'=>'Dynamique',
                'depaysement'=>'Dépaysement','coherence'=>'Cohérence'];
 
-    // Global : pénalité log pondérée par la force de préférence utilisateur.
-    // L'écart absolu |uv - cv| capture aussi bien les frictions (signes opposés, gap max=20)
-    // que les simples divergences — aucun cas n'est silencieusement ignoré.
-    $log21 = log(21); // log(1 + 20) : normalisation sur écart max possible
-    $totalWeight  = 0.0;
-    $totalPenalty = 0.0;
-    foreach ($user as $k => $uv) {
-        $uv = (float)$uv;
-        if (abs($uv) < 0.001) continue;
-        $cv  = (float)($content[$k] ?? 0);
-        $gap = abs($uv - $cv);
-        $totalWeight  += abs($uv);
-        $totalPenalty += abs($uv) * (log(1 + $gap) / $log21);
+    // Global : coverage linéaire + soustraction explicite des frictions.
+    // - Alignement (mêmes signes) : on comptabilise le min des deux intensités
+    // - Friction (signes opposés)  : on SOUSTRAIT le min des deux intensités
+    //   → un point de friction est doublement pénalisé : n'alimente pas l'aligné ET le réduit.
+    $magnitude = 0.0;
+    foreach ($user as $v) $magnitude += abs((float)$v);
+    $global = 0;
+    if ($magnitude > 0.001) {
+        $aligned = 0.0;
+        $friction = 0.0;
+        foreach ($user as $k => $uv) {
+            $uv = (float)$uv;
+            if (abs($uv) < 0.001) continue;
+            $cv = (float)($content[$k] ?? 0);
+            if ($uv > 0 && $cv > 0)         $aligned  += min($uv, $cv);
+            elseif ($uv < 0 && $cv < 0)     $aligned  += min(abs($uv), abs($cv));
+            elseif ($uv * $cv < -0.01)       $friction += min(abs($uv), abs($cv));
+        }
+        $global = (int)round(max(0, ($aligned - $friction) / $magnitude * 100));
     }
-    $global = $totalWeight > 0.001
-        ? (int)round(max(0, 1 - $totalPenalty / $totalWeight) * 100)
-        : 0;
 
-    // Par gène : proximité log sur échelle totale (écart max = 20)
+    // Par gène : proximité linéaire sur échelle [-10,+10] (écart max = 20)
     $genes = [];
     foreach (CRITERIA as $k) {
         $uv  = (float)($user[$k]    ?? 0);
         $cv  = (float)($content[$k] ?? 0);
-        $gap = abs($uv - $cv);
-        $pct = (int)max(0, round((1 - log(1 + $gap) / $log21) * 100));
+        $pct = (int)max(0, round((20 - abs($uv - $cv)) / 20 * 100));
         $genes[] = ['key' => $k, 'label' => $labels[$k], 'score' => $pct,
                     'user' => round($uv, 1), 'content' => round($cv, 1)];
     }
