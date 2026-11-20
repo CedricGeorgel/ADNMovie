@@ -130,12 +130,26 @@ if ($hasUserMovieDna && !empty($platformMovieIds)) {
     usort($scoredFilms, fn($a, $b) => $b['score'] <=> $a['score']);
 
     if (!empty($scoredFilms)) {
-        $topMovieData  = $scoredFilms[0];
-        $topMovie      = $topMovieData['film'];
-        $topMovieScore = (int)round($topMovieData['score'] * 100);
-        $topMovieMode  = 'dna';
-        $topMovieReasons    = $topMovieData['reasons'];
-        $topMovieAlternatives = array_slice($scoredFilms, 1, 4); // top 4 suivants
+        $topMovieData         = $scoredFilms[0];
+        $topMovie             = $topMovieData['film'];
+        $topMovieScore        = (int)round($topMovieData['score'] * 100);
+        $topMovieMode         = 'dna';
+        $topMovieAlternatives = array_slice($scoredFilms, 1, 4);
+        // Build full per-axis debug breakdown for the winning film
+        $topMovieDebugAxes = [];
+        foreach ($userMovieDna as $k => $ud) {
+            if (!isset($topMovie['dna'][$k])) continue;
+            $rawAvg    = (float)$topMovie['dna'][$k]['avg'];
+            $n         = (int)($topMovie['dna'][$k]['sample_size'] ?? 1);
+            $filmAvg   = ($n * $rawAvg + BAYESIAN_M * BAYESIAN_C) / ($n + BAYESIAN_M);
+            $userAvg   = (float)$ud['avg'];
+            $userVar   = (float)$ud['var'];
+            $varFactor = 2 * ($userVar + VARIANCE_SMOOTHING);
+            $proximity = exp(-pow($filmAvg - $userAvg, 2) / $varFactor);
+            $salient   = (abs($userAvg) > SALIENCY_THRESHOLD && abs($filmAvg) > SALIENCY_THRESHOLD && ($userAvg * $filmAvg) > 0)
+                         ? min(abs($userAvg), abs($filmAvg)) / 10.0 : 0.0;
+            $topMovieDebugAxes[$k] = ['proximity' => $proximity, 'saliency' => $salient, 'user' => $userAvg, 'film' => $filmAvg];
+        }
     }
 }
 
@@ -256,14 +270,29 @@ if ($hasUserDna) {
         usort($scoredSeries, fn($a, $b) => $b['score'] <=> $a['score']);
 
         if (!empty($scoredSeries)) {
-            $topSeriesData             = $scoredSeries[0];
-            $bestSeries                = $topSeriesData['series'];
-            $topSeries                 = $bestSeries;
-            $topSeries['id']           = (int)$bestSeries['tmdb_id'];
-            $topSeriesScore            = (int)round($topSeriesData['score'] * 100);
-            $topSeriesMode             = 'dna';
-            $topSeriesReasons          = $topSeriesData['reasons'];
-            $topSeriesAlternatives     = array_slice($scoredSeries, 1, 4);
+            $topSeriesData         = $scoredSeries[0];
+            $bestSeries            = $topSeriesData['series'];
+            $topSeries             = $bestSeries;
+            $topSeries['id']       = (int)$bestSeries['tmdb_id'];
+            $topSeriesScore        = (int)round($topSeriesData['score'] * 100);
+            $topSeriesMode         = 'dna';
+            $topSeriesAlternatives = array_slice($scoredSeries, 1, 4);
+            // Build full per-axis debug breakdown for the winning series
+            $winSeriesDna = $dnaBySeries[(int)$bestSeries['id']] ?? [];
+            $topSeriesDebugAxes = [];
+            foreach ($userSeriesDna as $k => $ud) {
+                if (!isset($winSeriesDna[$k])) continue;
+                $rawAvg    = (float)$winSeriesDna[$k]['avg'];
+                $n         = (int)($winSeriesDna[$k]['sample_size'] ?? 1);
+                $filmAvg   = ($n * $rawAvg + BAYESIAN_M * BAYESIAN_C) / ($n + BAYESIAN_M);
+                $userAvg   = (float)$ud['avg'];
+                $userVar   = (float)$ud['var'];
+                $varFactor = 2 * ($userVar + VARIANCE_SMOOTHING);
+                $proximity = exp(-pow($filmAvg - $userAvg, 2) / $varFactor);
+                $salient   = (abs($userAvg) > SALIENCY_THRESHOLD && abs($filmAvg) > SALIENCY_THRESHOLD && ($userAvg * $filmAvg) > 0)
+                             ? min(abs($userAvg), abs($filmAvg)) / 10.0 : 0.0;
+                $topSeriesDebugAxes[$k] = ['proximity' => $proximity, 'saliency' => $salient, 'user' => $userAvg, 'film' => $filmAvg];
+            }
         }
     }
 }
@@ -563,17 +592,19 @@ function formatCommunityScore(float $score): string {
                             · <?= count($scoredFilms) ?> avec ADN
                             <?php endif; ?>
                         </div>
-                        <?php if (!empty($topMovieReasons ?? [])): ?>
+                        <?php if (!empty($topMovieDebugAxes ?? [])): ?>
                         <div style="margin-top:10px;font-size:0.6rem;font-weight:800;letter-spacing:2px;color:var(--text-dim);margin-bottom:6px;">FILM RETENU — SCORE PAR AXE</div>
-                        <?php foreach (($topMovieReasons ?? []) as $r): ?>
-                        <?php if (abs($r['user_val'] ?? 0) < 0.5 && abs($r['film_val'] ?? 0) < 0.5) continue; ?>
+                        <?php foreach (($topMovieDebugAxes ?? []) as $k => $r): ?>
+                            <?php $prox = $r['proximity']; $sal = $r['saliency']; $isSalient = abs($r['user']) >= 2.0; ?>
                             <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.7rem;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.04);">
-                                <span style="color:var(--text-dim);flex:1;"><?= h($criteriaLabels[$r['criterio'] ?? ''] ?? ($r['criterio'] ?? '')) ?></span>
-                                <span style="color:var(--text-dim);font-size:0.65rem;margin-right:6px;">
-                                    moi:<?= number_format($r['user_val'] ?? 0, 1) ?> film:<?= number_format($r['film_val'] ?? 0, 1) ?>
+                                <span style="<?= $isSalient ? 'color:var(--text);font-weight:700;' : 'color:var(--text-dim);' ?>;flex:1;">
+                                    <?= h($criteriaLabels[$k] ?? $k) ?><?= $sal > 0 ? ' ✦' : '' ?>
                                 </span>
-                                <span style="font-weight:700;color:<?= ($r['contribution'] ?? 0) > 0.5 ? '#9dffb0' : (($r['contribution'] ?? 0) < 0.2 ? '#f87171' : 'var(--text)') ?>;">
-                                    <?= number_format(($r['contribution'] ?? 0) * 100, 0) ?>%
+                                <span style="color:var(--text-dim);font-size:0.65rem;margin-right:6px;">
+                                    moi:<?= ($r['user'] >= 0 ? '+' : '') . number_format($r['user'], 1) ?> film:<?= ($r['film'] >= 0 ? '+' : '') . number_format($r['film'], 1) ?>
+                                </span>
+                                <span style="font-weight:700;color:<?= $prox > 0.7 ? '#9dffb0' : ($prox < 0.3 ? '#f87171' : 'var(--text)') ?>;">
+                                    <?= number_format($prox * 100, 0) ?>%<?= $sal > 0 ? '<span style="color:#fbbf24;font-size:0.65rem;">+' . number_format($sal * 10, 1) . '</span>' : '' ?>
                                 </span>
                             </div>
                         <?php endforeach; ?>
@@ -598,17 +629,19 @@ function formatCommunityScore(float $score): string {
                             · <?= count($scoredSeries) ?> avec ADN
                             <?php endif; ?>
                         </div>
-                        <?php if (!empty($topSeriesReasons ?? [])): ?>
+                        <?php if (!empty($topSeriesDebugAxes ?? [])): ?>
                         <div style="margin-top:10px;font-size:0.6rem;font-weight:800;letter-spacing:2px;color:var(--text-dim);margin-bottom:6px;">SÉRIE RETENUE — SCORE PAR AXE</div>
-                        <?php foreach (($topSeriesReasons ?? []) as $r): ?>
-                        <?php if (abs($r['user_val'] ?? 0) < 0.5 && abs($r['film_val'] ?? 0) < 0.5) continue; ?>
+                        <?php foreach (($topSeriesDebugAxes ?? []) as $k => $r): ?>
+                            <?php $prox = $r['proximity']; $sal = $r['saliency']; $isSalient = abs($r['user']) >= 2.0; ?>
                             <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.7rem;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.04);">
-                                <span style="color:var(--text-dim);flex:1;"><?= h($criteriaLabels[$r['criterio'] ?? ''] ?? ($r['criterio'] ?? '')) ?></span>
-                                <span style="color:var(--text-dim);font-size:0.65rem;margin-right:6px;">
-                                    moi:<?= number_format($r['user_val'] ?? 0, 1) ?> film:<?= number_format($r['film_val'] ?? 0, 1) ?>
+                                <span style="<?= $isSalient ? 'color:var(--text);font-weight:700;' : 'color:var(--text-dim);' ?>;flex:1;">
+                                    <?= h($criteriaLabels[$k] ?? $k) ?><?= $sal > 0 ? ' ✦' : '' ?>
                                 </span>
-                                <span style="font-weight:700;color:<?= ($r['contribution'] ?? 0) > 0.5 ? '#9dffb0' : (($r['contribution'] ?? 0) < 0.2 ? '#f87171' : 'var(--text)') ?>;">
-                                    <?= number_format(($r['contribution'] ?? 0) * 100, 0) ?>%
+                                <span style="color:var(--text-dim);font-size:0.65rem;margin-right:6px;">
+                                    moi:<?= ($r['user'] >= 0 ? '+' : '') . number_format($r['user'], 1) ?> film:<?= ($r['film'] >= 0 ? '+' : '') . number_format($r['film'], 1) ?>
+                                </span>
+                                <span style="font-weight:700;color:<?= $prox > 0.7 ? '#9dffb0' : ($prox < 0.3 ? '#f87171' : 'var(--text)') ?>;">
+                                    <?= number_format($prox * 100, 0) ?>%<?= $sal > 0 ? '<span style="color:#fbbf24;font-size:0.65rem;">+' . number_format($sal * 10, 1) . '</span>' : '' ?>
                                 </span>
                             </div>
                         <?php endforeach; ?>
