@@ -11,7 +11,7 @@ require_once __DIR__ . '/../functions/utils.php';
 require_once __DIR__ . '/../functions/auth.php';
 
 header('Content-Type: application/json');
-require_role('superadmin');
+require_role('admin');
 
 $body   = json_decode(file_get_contents('php://input'), true) ?: [];
 $type   = $body['type']    ?? '';

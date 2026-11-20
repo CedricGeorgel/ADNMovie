@@ -11,7 +11,7 @@ require_once __DIR__ . '/../functions/utils.php';
 require_once __DIR__ . '/../functions/auth.php';
 
 header('Content-Type: application/json');
-require_role('superadmin');
+require_role('admin');
 
 // Séries sans rating Oracle
 $series = db_fetch_all(
