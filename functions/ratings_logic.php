@@ -589,28 +589,31 @@ function compute_dna_match(array $user, array $content): array
                'malaise'=>'Malaise','stylisation'=>'Stylisation','dynamique'=>'Dynamique',
                'depaysement'=>'Dépaysement','coherence'=>'Cohérence'];
 
-    // Global : coverage score (même direction = on comptabilise min des deux)
-    $magnitude = 0.0;
-    foreach ($user as $v) $magnitude += abs((float)$v);
-    $global = 0;
-    if ($magnitude > 0.001) {
-        $aligned = 0.0;
-        foreach ($user as $k => $uv) {
-            $uv = (float)$uv;
-            if (abs($uv) < 0.001) continue;
-            $cv = (float)($content[$k] ?? 0);
-            if ($uv > 0 && $cv > 0)       $aligned += min($uv, $cv);
-            elseif ($uv < 0 && $cv < 0)   $aligned += min(abs($uv), abs($cv));
-        }
-        $global = (int)round($aligned / $magnitude * 100);
+    // Global : pénalité log pondérée par la force de préférence utilisateur.
+    // L'écart absolu |uv - cv| capture aussi bien les frictions (signes opposés, gap max=20)
+    // que les simples divergences — aucun cas n'est silencieusement ignoré.
+    $log21 = log(21); // log(1 + 20) : normalisation sur écart max possible
+    $totalWeight  = 0.0;
+    $totalPenalty = 0.0;
+    foreach ($user as $k => $uv) {
+        $uv = (float)$uv;
+        if (abs($uv) < 0.001) continue;
+        $cv  = (float)($content[$k] ?? 0);
+        $gap = abs($uv - $cv);
+        $totalWeight  += abs($uv);
+        $totalPenalty += abs($uv) * (log(1 + $gap) / $log21);
     }
+    $global = $totalWeight > 0.001
+        ? (int)round(max(0, 1 - $totalPenalty / $totalWeight) * 100)
+        : 0;
 
-    // Par gène : proximité linéaire sur échelle [-10,+10] (écart max = 20)
+    // Par gène : proximité log sur échelle totale (écart max = 20)
     $genes = [];
     foreach (CRITERIA as $k) {
         $uv  = (float)($user[$k]    ?? 0);
         $cv  = (float)($content[$k] ?? 0);
-        $pct = (int)max(0, round((20 - abs($uv - $cv)) / 20 * 100));
+        $gap = abs($uv - $cv);
+        $pct = (int)max(0, round((1 - log(1 + $gap) / $log21) * 100));
         $genes[] = ['key' => $k, 'label' => $labels[$k], 'score' => $pct,
                     'user' => round($uv, 1), 'content' => round($cv, 1)];
     }
@@ -649,14 +652,13 @@ function get_similar_content_by_dna(array $refDna, int $excludeMovieTmdbId = 0, 
         $dnaBySeries[$sid][$r['criterio']] = (float)$r['avg_score'];
     }
 
-    // Calculer les distances
+    // Calculer les distances (log-sum : pénalise proportionnellement chaque écart)
     $distances = [];
     foreach ($dnaByMovie as $mid => $dna) {
         if (count($dna) < 4) continue;
         $dist = 0.0;
         foreach ($refDna as $k => $v) {
-            $diff = (float)$v - (float)($dna[$k] ?? 0);
-            $dist += $diff * $diff;
+            $dist += log(1 + abs((float)$v - (float)($dna[$k] ?? 0)));
         }
         $distances[] = ['local_id' => $mid, 'dist' => $dist, 'type' => 'movie'];
     }
@@ -664,8 +666,7 @@ function get_similar_content_by_dna(array $refDna, int $excludeMovieTmdbId = 0, 
         if (count($dna) < 4) continue;
         $dist = 0.0;
         foreach ($refDna as $k => $v) {
-            $diff = (float)$v - (float)($dna[$k] ?? 0);
-            $dist += $diff * $diff;
+            $dist += log(1 + abs((float)$v - (float)($dna[$k] ?? 0)));
         }
         $distances[] = ['local_id' => $sid, 'dist' => $dist, 'type' => 'series'];
     }
