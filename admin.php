@@ -258,9 +258,14 @@ $userActivity = array_column($activityRows, 'cnt', 'user_id');
                             Ne touche <strong>pas</strong> aux scores ADN existants.
                         </p>
                         <div id="oracleSyncLog" style="display:none;font-size:0.72rem;font-family:monospace;padding:8px 10px;background:var(--card-bg);border:1px solid var(--border);border-radius:6px;margin-bottom:12px;"></div>
-                        <button id="btnOracleSync" class="btn-base active" style="width:100%;" onclick="runOracleSync(this)">
-                            ⚡ Lancer Oracle (toute la base)
-                        </button>
+                        <div style="display:flex;gap:8px;">
+                            <button id="btnOracleSyncMovies" class="btn-base active" style="flex:1;" onclick="runOracleSync(this,'movie')">
+                                🎬 Films
+                            </button>
+                            <button id="btnOracleSyncSeries" class="btn-base active" style="flex:1;" onclick="runOracleSync(this,'series')">
+                                📺 Séries
+                            </button>
+                        </div>
                         <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
                             <p style="font-size:0.72rem;color:var(--text-dim);margin-bottom:10px;">
                                 Supprime les séries sans note Oracle pour qu'elles soient re-traitées à la prochaine visite de leur fiche.
@@ -579,20 +584,23 @@ $userActivity = array_column($activityRows, 'cnt', 'user_id');
     <script src="assets/js/ui.js" defer></script>
     <script src="assets/js/admin.js?v=<?= filemtime('assets/js/admin.js') ?>"></script>
     <script>
-    async function runOracleSync(btn) {
+    async function runOracleSync(btn, type) {
+        const otherBtn = document.getElementById(type === 'movie' ? 'btnOracleSyncSeries' : 'btnOracleSyncMovies');
         btn.disabled = true;
+        if (otherBtn) otherBtn.disabled = true;
         const log = document.getElementById('oracleSyncLog');
         log.style.display = 'block';
         log.style.color = 'var(--text-dim)';
 
+        const label = type === 'movie' ? 'Films' : 'Séries';
+        let offset = 0, totalUpdated = 0, totalSkipped = 0, grandTotal = 0;
         let secs = 0;
         const timer = setInterval(() => { secs++; }, 1000);
 
-        const runPhase = async (type, label) => {
-            let offset = 0, totalUpdated = 0, totalSkipped = 0, totalErrors = 0, grandTotal = 0;
+        try {
             let done = false;
             while (!done) {
-                btn.textContent = `Oracle ${label}… ${offset}/${grandTotal || '?'} (${secs}s)`;
+                btn.textContent = `${label}… ${offset}/${grandTotal || '?'} (${secs}s)`;
                 log.textContent = `${label} — batch ${offset + 1}–${offset + 50}…`;
 
                 const body = new URLSearchParams({ type, offset, limit: 50 });
@@ -603,30 +611,21 @@ $userActivity = array_column($activityRows, 'cnt', 'user_id');
 
                 totalUpdated += data.updated;
                 totalSkipped += data.skipped;
-                totalErrors  += data.errors ?? 0;
                 grandTotal    = data.total;
                 offset        = data.offset;
                 done          = data.done;
             }
-            return { totalUpdated, totalSkipped, totalErrors, grandTotal };
-        };
-
-        try {
-            const films   = await runPhase('movie',  'Films');
-            const series  = await runPhase('series', 'Séries');
             clearInterval(timer);
             log.style.color = '#9dffb0';
-            log.innerHTML =
-                `✓ Films : ${films.totalUpdated} màj · ${films.totalSkipped} ignorés · ${films.grandTotal} total<br>` +
-                `✓ Séries : ${series.totalUpdated} màj · ${series.totalSkipped} ignorés · ${series.grandTotal} total<br>` +
-                `Durée : ${secs}s`;
+            log.innerHTML = `✓ ${label} : ${totalUpdated} màj · ${totalSkipped} ignorés · ${grandTotal} total · ${secs}s`;
         } catch (e) {
             clearInterval(timer);
             log.style.color = '#f87171';
             log.textContent = `✗ ${e.message}`;
         }
         btn.disabled = false;
-        btn.textContent = '⚡ Lancer Oracle (toute la base)';
+        btn.textContent = type === 'movie' ? '🎬 Films' : '📺 Séries';
+        if (otherBtn) otherBtn.disabled = false;
     }
 
     async function runTmdbImport(type, btn) {
