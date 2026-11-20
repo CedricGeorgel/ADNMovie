@@ -9,25 +9,31 @@ function switchProfileTab(tab) {
     if (tab === 'plateformes') loadPlatforms();
 }
 
-async function resetSkippedFilms() {
-    const btn = document.getElementById('btn-reset-skipped');
-    if (!confirm('Remettre en jeu tous les films passés avec "Pas ce soir" ?')) return;
+async function resetSkipped(type, btn) {
+    const labels = { movies: 'films', series: 'séries' };
+    const label  = labels[type] || type;
+    if (!confirm(`Remettre en jeu tous les ${label} passés avec "Pas ce soir" ?`)) return;
+    const orig = btn.textContent;
     btn.textContent = '…';
     btn.disabled = true;
     try {
-        const r = await fetch('api/api_reset_skipped.php', { method: 'POST' });
+        const r = await fetch('api/api_reset_skipped.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ type })
+        });
         const d = await r.json();
         if (d.success) {
-            btn.textContent = d.reset > 0 ? `✓ ${d.reset} film${d.reset > 1 ? 's' : ''} remis en jeu` : '✓ Aucun film à réinitialiser';
+            btn.textContent = d.reset > 0 ? `✓ ${d.reset} remis en jeu` : '✓ Rien à réinitialiser';
             btn.style.color = '#6ee7b7';
             btn.style.borderColor = 'rgba(110,231,183,0.3)';
             btn.style.background = 'rgba(110,231,183,0.07)';
         } else {
-            btn.textContent = 'Erreur';
+            btn.textContent = orig;
             btn.disabled = false;
         }
     } catch(e) {
-        btn.textContent = 'Erreur réseau';
+        btn.textContent = orig;
         btn.disabled = false;
     }
 }

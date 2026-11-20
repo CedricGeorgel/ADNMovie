@@ -733,16 +733,30 @@ if ($isOwnProfile && !empty($_SESSION['signal_perdu'])) {
                         <div id="tab-donnees" style="display:none;">
                             <p style="font-size:0.7rem;color:var(--text-dim);margin-bottom:24px;line-height:1.6;">Gérez les données générées par votre activité sur la plateforme.</p>
 
-                            <div style="border:1px solid var(--border);border-radius:12px;padding:18px 20px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
-                                <div>
-                                    <div style="font-size:0.75rem;font-weight:700;color:var(--text-main);margin-bottom:4px;">Films écartés (Shoot)</div>
-                                    <div style="font-size:0.65rem;color:var(--text-dim);line-height:1.5;">Remet en jeu tous les films que vous avez passés avec "Pas ce soir" dans le Shoot. Ils pourront à nouveau apparaître dans vos recommandations.</div>
+                            <div style="display:flex;flex-direction:column;gap:12px;">
+                                <div style="border:1px solid var(--border);border-radius:12px;padding:18px 20px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+                                    <div>
+                                        <div style="font-size:0.75rem;font-weight:700;color:var(--text-main);margin-bottom:4px;">Films écartés (Shoot)</div>
+                                        <div style="font-size:0.65rem;color:var(--text-dim);line-height:1.5;">Remet en jeu tous les films passés avec "Pas ce soir".</div>
+                                    </div>
+                                    <button onclick="resetSkipped('movies', this)"
+                                            style="flex-shrink:0;padding:9px 16px;border-radius:8px;border:1px solid rgba(255,180,0,0.3);background:rgba(255,180,0,0.07);color:#fbbf24;font-size:0.65rem;font-weight:700;letter-spacing:1px;cursor:pointer;white-space:nowrap;transition:background .2s;"
+                                            onmouseover="this.style.background='rgba(255,180,0,0.15)'" onmouseout="this.style.background='rgba(255,180,0,0.07)'">
+                                        RÉINITIALISER
+                                    </button>
                                 </div>
-                                <button onclick="resetSkippedFilms()" id="btn-reset-skipped"
-                                        style="flex-shrink:0;padding:9px 16px;border-radius:8px;border:1px solid rgba(255,180,0,0.3);background:rgba(255,180,0,0.07);color:#fbbf24;font-size:0.65rem;font-weight:700;letter-spacing:1px;cursor:pointer;white-space:nowrap;transition:background .2s;"
-                                        onmouseover="this.style.background='rgba(255,180,0,0.15)'" onmouseout="this.style.background='rgba(255,180,0,0.07)'">
-                                    RÉINITIALISER
-                                </button>
+
+                                <div style="border:1px solid var(--border);border-radius:12px;padding:18px 20px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+                                    <div>
+                                        <div style="font-size:0.75rem;font-weight:700;color:var(--text-main);margin-bottom:4px;">Séries écartées (Shoot)</div>
+                                        <div style="font-size:0.65rem;color:var(--text-dim);line-height:1.5;">Remet en jeu toutes les séries passées avec "Pas ce soir".</div>
+                                    </div>
+                                    <button onclick="resetSkipped('series', this)"
+                                            style="flex-shrink:0;padding:9px 16px;border-radius:8px;border:1px solid rgba(255,180,0,0.3);background:rgba(255,180,0,0.07);color:#fbbf24;font-size:0.65rem;font-weight:700;letter-spacing:1px;cursor:pointer;white-space:nowrap;transition:background .2s;"
+                                            onmouseover="this.style.background='rgba(255,180,0,0.15)'" onmouseout="this.style.background='rgba(255,180,0,0.07)'">
+                                        RÉINITIALISER
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
