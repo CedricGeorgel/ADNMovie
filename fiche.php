@@ -467,7 +467,10 @@ $canonicalUrl  = 'https://adnmovie.fr/fiche.php?id=' . $tmdbId
                 <?php renderCommentSection('M-' . $movieId, $currentUser, $userId); ?>
 
                 <?php if (has_role('admin')): ?>
-                <div style="margin-top:40px; text-align:right;">
+                <div style="margin-top:40px; display:flex; justify-content:flex-end; gap:16px; align-items:center;">
+                    <button id="btn-play-imdb" onclick="window.playImdb(<?= $movieId ?>)" style="background:none; border:1px solid rgba(255,255,255,0.1); color:rgba(255,255,255,0.5); font-size:0.6rem; cursor:pointer; text-transform:uppercase; letter-spacing:1px; padding:6px 12px; border-radius:6px;">
+                        ▶ Lire via IMDb
+                    </button>
                     <button onclick="window.purgeFilm(<?= $movieId ?>)" style="background:none; border:none; color:rgba(255,77,77,0.4); font-size:0.6rem; cursor:pointer; text-transform:uppercase; letter-spacing:1px;">
                         ⌫ Purger l'archive
                     </button>

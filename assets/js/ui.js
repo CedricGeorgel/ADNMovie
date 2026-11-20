@@ -496,6 +496,24 @@ window.cancelReply = function () {
     if (indicator) indicator.style.display = 'none';
 };
 
+window.playImdb = async function(tmdbId) {
+    const btn = document.getElementById('btn-play-imdb');
+    if (btn) { btn.textContent = '⏳ Chargement…'; btn.disabled = true; }
+    try {
+        const r = await fetch('api/api_get_imdb_id.php?tmdb_id=' + tmdbId);
+        const d = await r.json();
+        if (d.success) {
+            window.open('https://player.imdb.su/embed/movie/' + d.imdb_id, '_blank');
+        } else {
+            alert(d.message || 'ID IMDb introuvable');
+        }
+    } catch(e) {
+        alert('Erreur réseau');
+    } finally {
+        if (btn) { btn.textContent = '▶ Lire via IMDb'; btn.disabled = false; }
+    }
+};
+
 window.purgeFilm = function(id) {
     if (confirm('Purger l\'archive et toutes ses notes ?') && confirm('Action irréversible. Confirmer ?')) {
         fetch('api/api_delete_movie.php', {
