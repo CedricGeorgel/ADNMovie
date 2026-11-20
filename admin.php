@@ -261,6 +261,15 @@ $userActivity = array_column($activityRows, 'cnt', 'user_id');
                         <button id="btnOracleSync" class="btn-base active" style="width:100%;" onclick="runOracleSync(this)">
                             ⚡ Lancer Oracle (toute la base)
                         </button>
+                        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
+                            <p style="font-size:0.72rem;color:var(--text-dim);margin-bottom:10px;">
+                                Supprime les séries sans note Oracle pour qu'elles soient re-traitées à la prochaine visite de leur fiche.
+                            </p>
+                            <div id="purgeSyncLog" style="display:none;font-size:0.72rem;font-family:monospace;padding:8px 10px;background:var(--card-bg);border:1px solid var(--border);border-radius:6px;margin-bottom:10px;"></div>
+                            <button class="btn-base" style="width:100%;" onclick="runPurgeSeriesNoOracle()">
+                                🧹 Purger séries sans Oracle
+                            </button>
+                        </div>
                     </div>
 
                 </div>
@@ -779,6 +788,24 @@ $userActivity = array_column($activityRows, 'cnt', 'user_id');
             document.getElementById('deleteContentId').value      = '';
             document.getElementById('deleteSearchInput').value    = '';
             document.getElementById('deleteSelected').style.display = 'none';
+        }
+    }
+
+    async function runPurgeSeriesNoOracle() {
+        const log = document.getElementById('purgeSyncLog');
+        if (!confirm('Supprimer toutes les séries sans note Oracle ? Elles seront re-traitées à la prochaine visite de leur fiche.')) return;
+        log.style.display = 'block';
+        log.style.color   = 'var(--text-dim)';
+        log.textContent   = 'Purge en cours…';
+        const res  = await fetch('api/api_admin_purge_series_no_oracle.php', { method: 'POST' });
+        const json = await res.json();
+        log.style.color = json.ok ? '#9dffb0' : '#f87171';
+        if (json.ok && json.deleted === 0) {
+            log.textContent = '✓ ' + json.message;
+        } else if (json.ok) {
+            log.textContent = `✓ ${json.deleted} série(s) supprimée(s) :\n` + json.titles.join(', ');
+        } else {
+            log.textContent = json.error || 'Erreur';
         }
     }
     </script>
